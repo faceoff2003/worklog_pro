@@ -1,0 +1,92 @@
+name: worklog_pro
+description: "Professional work tracking application for electricians"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Firebase
+  firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
+  cloud_firestore: ^6.1.2
+  firebase_storage: ^13.0.6
+  firebase_app_check: ^0.4.1+4
+  
+  # State Management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+  
+  # Freezed (immutability)
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.9.0
+  
+  # PDF & Excel
+  pdf: ^3.11.1
+  printing: ^5.13.4
+  excel: ^4.0.6
+  
+  # Security
+  flutter_secure_storage: ^10.0.0
+  local_auth: ^2.3.0
+  
+  # Google Drive
+  googleapis: ^15.0.0
+  google_sign_in: ^6.2.1
+  
+  # UI & Utils
+  intl: ^0.20.2
+  file_picker: ^10.3.10
+  image_picker: ^1.1.2
+  collection: ^1.18.0
+  
+  # Networking
+  connectivity_plus: ^7.0.0
+  
+  # UUID
+  uuid: ^4.5.1
+  shared_preferences: ^2.5.3
+  table_calendar: ^3.2.0
+  rxdart: ^0.28.0
+  share_plus: ^10.1.4
+  fl_chart: ^0.70.2
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+  http: ^1.2.1
+  flutter_localizations:
+    sdk: flutter
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  # Code generation
+  build_runner: ^2.4.8
+  freezed: ^3.1.0
+  json_serializable: ^6.7.1
+  riverpod_generator: ^2.4.0
+  
+  # Linting
+  flutter_lints: ^5.0.0
+  # App icon generator
+  flutter_launcher_icons: ^0.14.3
+
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - assets/
+
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+

@@ -1,0 +1,331 @@
+> Task :gradle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle:compileKotlin UP-TO-DATE
+> Task :gradle:compileJava NO-SOURCE
+> Task :gradle:compileGroovy NO-SOURCE
+> Task :gradle:pluginDescriptors UP-TO-DATE
+> Task :gradle:processResources UP-TO-DATE
+> Task :gradle:classes UP-TO-DATE
+> Task :gradle:jar UP-TO-DATE
+WARNING: We recommend using a newer Android Gradle plugin to use compileSdk = 36
+
+This Android Gradle plugin (8.7.3) was tested up to compileSdk = 35.
+
+You are strongly encouraged to update your project to use a newer
+Android Gradle plugin that has been tested with compileSdk = 36.
+
+If you are already using the latest version of the Android Gradle plugin,
+you may need to wait until a newer version with support for compileSdk = 36 is available.
+
+For more information refer to the compatibility table:
+https://d.android.com/r/tools/api-level-support
+
+To suppress this warning, add/update
+    android.suppressUnsupportedCompileSdk=36
+to this project's gradle.properties.
+> Task :app:DebugMinSdkCheck
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:compileFlutterBuildDebug
+> Task :app:packJniLibsflutterBuildDebug
+> Task :cloud_firestore:preBuild UP-TO-DATE
+> Task :cloud_firestore:preDebugBuild UP-TO-DATE
+> Task :connectivity_plus:preBuild UP-TO-DATE
+> Task :connectivity_plus:preDebugBuild UP-TO-DATE
+> Task :cloud_firestore:writeDebugAarMetadata
+> Task :file_picker:preBuild UP-TO-DATE
+> Task :file_picker:preDebugBuild UP-TO-DATE
+> Task :connectivity_plus:writeDebugAarMetadata
+> Task :firebase_app_check:preBuild UP-TO-DATE
+> Task :firebase_app_check:preDebugBuild UP-TO-DATE
+> Task :file_picker:writeDebugAarMetadata
+> Task :firebase_auth:preBuild UP-TO-DATE
+> Task :firebase_auth:preDebugBuild UP-TO-DATE
+> Task :firebase_app_check:writeDebugAarMetadata
+> Task :firebase_core:preBuild UP-TO-DATE
+> Task :firebase_core:preDebugBuild UP-TO-DATE
+> Task :firebase_auth:writeDebugAarMetadata
+> Task :firebase_storage:preBuild UP-TO-DATE
+> Task :firebase_storage:preDebugBuild UP-TO-DATE
+> Task :firebase_core:writeDebugAarMetadata
+> Task :flutter_plugin_android_lifecycle:preBuild UP-TO-DATE
+> Task :flutter_plugin_android_lifecycle:preDebugBuild UP-TO-DATE
+> Task :firebase_storage:writeDebugAarMetadata
+> Task :flutter_secure_storage:preBuild UP-TO-DATE
+> Task :flutter_secure_storage:preDebugBuild UP-TO-DATE
+> Task :flutter_plugin_android_lifecycle:writeDebugAarMetadata
+> Task :google_sign_in_android:preBuild UP-TO-DATE
+> Task :google_sign_in_android:preDebugBuild UP-TO-DATE
+> Task :flutter_secure_storage:writeDebugAarMetadata
+> Task :image_picker_android:preBuild UP-TO-DATE
+> Task :image_picker_android:preDebugBuild UP-TO-DATE
+> Task :google_sign_in_android:writeDebugAarMetadata
+> Task :local_auth_android:preBuild UP-TO-DATE
+> Task :local_auth_android:preDebugBuild UP-TO-DATE
+> Task :image_picker_android:writeDebugAarMetadata
+> Task :path_provider_android:preBuild UP-TO-DATE
+> Task :path_provider_android:preDebugBuild UP-TO-DATE
+> Task :local_auth_android:writeDebugAarMetadata
+> Task :printing:preBuild UP-TO-DATE
+> Task :printing:preDebugBuild UP-TO-DATE
+> Task :path_provider_android:writeDebugAarMetadata
+> Task :shared_preferences_android:preBuild UP-TO-DATE
+> Task :shared_preferences_android:preDebugBuild UP-TO-DATE
+> Task :printing:writeDebugAarMetadata
+> Task :app:cleanMergeDebugAssets UP-TO-DATE
+> Task :shared_preferences_android:writeDebugAarMetadata
+> Task :app:mergeDebugShaders
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :cloud_firestore:mergeDebugShaders
+> Task :cloud_firestore:compileDebugShaders NO-SOURCE
+> Task :cloud_firestore:generateDebugAssets UP-TO-DATE
+> Task :app:checkDebugAarMetadata
+> Task :cloud_firestore:packageDebugAssets
+> Task :connectivity_plus:mergeDebugShaders
+> Task :connectivity_plus:compileDebugShaders NO-SOURCE
+> Task :connectivity_plus:generateDebugAssets UP-TO-DATE
+> Task :connectivity_plus:packageDebugAssets
+> Task :file_picker:mergeDebugShaders
+> Task :file_picker:compileDebugShaders NO-SOURCE
+> Task :file_picker:generateDebugAssets UP-TO-DATE
+> Task :file_picker:packageDebugAssets
+> Task :firebase_app_check:mergeDebugShaders
+> Task :firebase_app_check:compileDebugShaders NO-SOURCE
+> Task :firebase_app_check:generateDebugAssets UP-TO-DATE
+> Task :firebase_app_check:packageDebugAssets
+> Task :firebase_auth:mergeDebugShaders
+> Task :firebase_auth:compileDebugShaders NO-SOURCE
+> Task :firebase_auth:generateDebugAssets UP-TO-DATE
+> Task :firebase_auth:packageDebugAssets
+> Task :firebase_core:mergeDebugShaders
+> Task :firebase_core:compileDebugShaders NO-SOURCE
+> Task :firebase_core:generateDebugAssets UP-TO-DATE
+> Task :firebase_core:packageDebugAssets
+> Task :firebase_storage:mergeDebugShaders
+> Task :firebase_storage:compileDebugShaders NO-SOURCE
+> Task :firebase_storage:generateDebugAssets UP-TO-DATE
+> Task :firebase_storage:packageDebugAssets
+> Task :flutter_plugin_android_lifecycle:mergeDebugShaders
+> Task :flutter_plugin_android_lifecycle:compileDebugShaders NO-SOURCE
+> Task :flutter_plugin_android_lifecycle:generateDebugAssets UP-TO-DATE
+> Task :flutter_plugin_android_lifecycle:packageDebugAssets
+> Task :flutter_secure_storage:mergeDebugShaders
+> Task :flutter_secure_storage:compileDebugShaders NO-SOURCE
+> Task :flutter_secure_storage:generateDebugAssets UP-TO-DATE
+> Task :flutter_secure_storage:packageDebugAssets
+> Task :google_sign_in_android:mergeDebugShaders
+> Task :google_sign_in_android:compileDebugShaders NO-SOURCE
+> Task :google_sign_in_android:generateDebugAssets UP-TO-DATE
+> Task :google_sign_in_android:packageDebugAssets
+> Task :image_picker_android:mergeDebugShaders
+> Task :image_picker_android:compileDebugShaders NO-SOURCE
+> Task :image_picker_android:generateDebugAssets UP-TO-DATE
+> Task :image_picker_android:packageDebugAssets
+> Task :local_auth_android:mergeDebugShaders
+> Task :local_auth_android:compileDebugShaders NO-SOURCE
+> Task :local_auth_android:generateDebugAssets UP-TO-DATE
+> Task :local_auth_android:packageDebugAssets
+> Task :path_provider_android:mergeDebugShaders
+> Task :path_provider_android:compileDebugShaders NO-SOURCE
+> Task :path_provider_android:generateDebugAssets UP-TO-DATE
+> Task :path_provider_android:packageDebugAssets
+> Task :printing:mergeDebugShaders
+> Task :printing:compileDebugShaders NO-SOURCE
+> Task :printing:generateDebugAssets UP-TO-DATE
+> Task :printing:packageDebugAssets
+> Task :shared_preferences_android:mergeDebugShaders
+> Task :shared_preferences_android:compileDebugShaders NO-SOURCE
+> Task :shared_preferences_android:generateDebugAssets UP-TO-DATE
+> Task :shared_preferences_android:packageDebugAssets
+> Task :app:mergeDebugAssets
+> Task :app:copyFlutterAssetsDebug
+> Task :app:generateDebugResValues
+> Task :cloud_firestore:generateDebugResValues
+> Task :cloud_firestore:generateDebugResources
+> Task :cloud_firestore:packageDebugResources
+> Task :connectivity_plus:generateDebugResValues
+> Task :connectivity_plus:generateDebugResources
+> Task :connectivity_plus:packageDebugResources
+> Task :file_picker:generateDebugResValues
+> Task :file_picker:generateDebugResources
+> Task :file_picker:packageDebugResources
+> Task :firebase_app_check:generateDebugResValues
+> Task :firebase_app_check:generateDebugResources
+> Task :firebase_app_check:packageDebugResources
+> Task :firebase_auth:generateDebugResValues
+> Task :firebase_auth:generateDebugResources
+> Task :firebase_auth:packageDebugResources
+> Task :firebase_core:generateDebugResValues
+> Task :firebase_core:generateDebugResources
+> Task :firebase_core:packageDebugResources
+> Task :firebase_storage:generateDebugResValues
+> Task :firebase_storage:generateDebugResources
+> Task :firebase_storage:packageDebugResources
+> Task :flutter_plugin_android_lifecycle:generateDebugResValues
+> Task :flutter_plugin_android_lifecycle:generateDebugResources
+> Task :flutter_plugin_android_lifecycle:packageDebugResources
+> Task :flutter_secure_storage:generateDebugResValues
+> Task :flutter_secure_storage:generateDebugResources
+> Task :flutter_secure_storage:packageDebugResources
+> Task :google_sign_in_android:generateDebugResValues
+> Task :google_sign_in_android:generateDebugResources
+> Task :google_sign_in_android:packageDebugResources
+> Task :image_picker_android:generateDebugResValues
+> Task :image_picker_android:generateDebugResources
+> Task :image_picker_android:packageDebugResources
+> Task :local_auth_android:generateDebugResValues
+> Task :local_auth_android:generateDebugResources
+> Task :local_auth_android:packageDebugResources
+> Task :path_provider_android:generateDebugResValues
+> Task :path_provider_android:generateDebugResources
+> Task :path_provider_android:packageDebugResources
+> Task :printing:generateDebugResValues
+> Task :printing:generateDebugResources
+> Task :printing:packageDebugResources
+> Task :shared_preferences_android:generateDebugResValues
+> Task :shared_preferences_android:generateDebugResources
+> Task :shared_preferences_android:packageDebugResources
+> Task :app:mapDebugSourceSetPaths
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:parseDebugLocalResources
+> Task :app:extractDeepLinksDebug
+> Task :cloud_firestore:extractDeepLinksDebug
+> Task :connectivity_plus:extractDeepLinksDebug
+> Task :file_picker:extractDeepLinksDebug
+
+> Task :connectivity_plus:processDebugManifest
+package="dev.fluttercommunity.plus.connectivity" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\connectivity_plus-7.0.0\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="dev.fluttercommunity.plus.connectivity" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\connectivity_plus-7.0.0\android\src\main\AndroidManifest.xml.
+
+> Task :cloud_firestore:processDebugManifest
+package="io.flutter.plugins.firebase.firestore" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_firestore-6.1.2\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.firebase.firestore" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_firestore-6.1.2\android\src\main\AndroidManifest.xml.
+
+> Task :firebase_app_check:extractDeepLinksDebug
+
+> Task :file_picker:processDebugManifest
+package="com.mr.flutter.plugin.filepicker" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\file_picker-10.3.10\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="com.mr.flutter.plugin.filepicker" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\file_picker-10.3.10\android\src\main\AndroidManifest.xml.
+
+> Task :firebase_auth:extractDeepLinksDebug
+
+> Task :firebase_app_check:processDebugManifest
+package="io.flutter.plugins.firebase.appcheck" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_app_check-0.4.1+4\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.firebase.appcheck" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_app_check-0.4.1+4\android\src\main\AndroidManifest.xml.
+
+> Task :app:mergeDebugResources
+> Task :firebase_core:extractDeepLinksDebug
+
+> Task :firebase_auth:processDebugManifest
+package="io.flutter.plugins.firebase.auth" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_auth-6.1.4\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.firebase.auth" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_auth-6.1.4\android\src\main\AndroidManifest.xml.
+
+> Task :firebase_storage:extractDeepLinksDebug
+
+> Task :firebase_core:processDebugManifest
+package="io.flutter.plugins.firebase.core" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_core-4.4.0\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.firebase.core" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_core-4.4.0\android\src\main\AndroidManifest.xml.
+
+> Task :flutter_plugin_android_lifecycle:extractDeepLinksDebug
+
+> Task :firebase_storage:processDebugManifest
+package="io.flutter.plugins.firebase.storage" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_storage-13.0.6\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.firebase.storage" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\firebase_storage-13.0.6\android\src\main\AndroidManifest.xml.
+
+> Task :flutter_secure_storage:extractDeepLinksDebug
+
+> Task :flutter_plugin_android_lifecycle:processDebugManifest
+package="io.flutter.plugins.flutter_plugin_android_lifecycle" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_plugin_android_lifecycle-2.0.31\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.flutter_plugin_android_lifecycle" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_plugin_android_lifecycle-2.0.31\android\src\main\AndroidManifest.xml.
+
+> Task :google_sign_in_android:extractDeepLinksDebug
+> Task :flutter_secure_storage:processDebugManifest
+> Task :image_picker_android:extractDeepLinksDebug
+
+> Task :google_sign_in_android:processDebugManifest
+package="io.flutter.plugins.googlesignin" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\google_sign_in_android-6.2.1\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.googlesignin" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\google_sign_in_android-6.2.1\android\src\main\AndroidManifest.xml.
+
+> Task :local_auth_android:extractDeepLinksDebug
+
+> Task :image_picker_android:processDebugManifest
+package="io.flutter.plugins.imagepicker" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.imagepicker" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+1\android\src\main\AndroidManifest.xml.
+
+> Task :path_provider_android:extractDeepLinksDebug
+
+> Task :local_auth_android:processDebugManifest
+package="io.flutter.plugins.localauth" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\local_auth_android-1.0.52\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.localauth" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\local_auth_android-1.0.52\android\src\main\AndroidManifest.xml.
+
+> Task :printing:extractDeepLinksDebug
+
+> Task :path_provider_android:processDebugManifest
+package="io.flutter.plugins.pathprovider" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_android-2.2.19\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.pathprovider" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_android-2.2.19\android\src\main\AndroidManifest.xml.
+
+> Task :shared_preferences_android:extractDeepLinksDebug
+
+> Task :printing:processDebugManifest
+package="net.nfet.flutter.printing" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\printing-5.14.2\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="net.nfet.flutter.printing" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\printing-5.14.2\android\src\main\AndroidManifest.xml.
+
+> Task :shared_preferences_android:processDebugManifest
+package="io.flutter.plugins.sharedpreferences" found in source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.13\android\src\main\AndroidManifest.xml.
+Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+Recommendation: remove package="io.flutter.plugins.sharedpreferences" from the source AndroidManifest.xml: C:\Users\Admin\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.13\android\src\main\AndroidManifest.xml.
+
+> Task :cloud_firestore:compileDebugLibraryResources
+
+> Task :app:processDebugMainManifest FAILED
+C:\Users\Admin\.gemini\antigravity\scratch\worklog_pro\android\app\src\debug\AndroidManifest.xml Error:
+	uses-sdk:minSdkVersion 23 cannot be smaller than version 24 declared in library [:flutter_secure_storage] C:\Users\Admin\.gemini\antigravity\scratch\worklog_pro\build\flutter_secure_storage\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml as the library might be using APIs not available in 23
+	Suggestion: use a compatible library with a minSdk of at most 23,
+		or increase this project's minSdk version to at least 24,
+		or use tools:overrideLibrary="com.it_nomads.fluttersecurestorage" to force usage (may lead to runtime failures)
+
+See https://developer.android.com/r/studio-ui/build/manifest-merger for more information about the manifest merger.
+
+
+[Incubating] Problems report is available at: file:///C:/Users/Admin/.gemini/antigravity/scratch/worklog_pro/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:processDebugMainManifest'.
+> Manifest merger failed : uses-sdk:minSdkVersion 23 cannot be smaller than version 24 declared in library [:flutter_secure_storage] C:\Users\Admin\.gemini\antigravity\scratch\worklog_pro\build\flutter_secure_storage\intermediates\merged_manifest\debug\processDebugManifest\AndroidManifest.xml as the library might be using APIs not available in 23
+  	Suggestion: use a compatible library with a minSdk of at most 23,
+  		or increase this project's minSdk version to at least 24,
+  		or use tools:overrideLibrary="com.it_nomads.fluttersecurestorage" to force usage (may lead to runtime failures)
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.12/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 25s
+142 actionable tasks: 137 executed, 5 up-to-date

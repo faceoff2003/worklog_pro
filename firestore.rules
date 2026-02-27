@@ -1,0 +1,193 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================
+    // DENY ALL by default
+    // ========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ========================================
+    // Helper functions
+    // ========================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidString(field, maxLen) {
+      return field is string && field.size() > 0 && field.size() <= maxLen;
+    }
+
+    function isOptionalString(field, maxLen) {
+      return field == null || (field is string && field.size() <= maxLen);
+    }
+
+    function isPositiveInt(field) {
+      return field is int && field >= 0;
+    }
+
+    function isStrictPositiveInt(field) {
+      return field is int && field > 0;
+    }
+
+    function hasTimestamps(data) {
+      return ('createdAt' in data) && ('updatedAt' in data);
+    }
+
+    function createdAtUnchanged() {
+      return request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    // ========================================
+    // USERS - Allow authenticated users to create/manage their own profile
+    // ========================================
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    // ========================================
+    // CLIENTS
+    // ========================================
+    match /users/{userId}/clients/{clientId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && isValidString(request.resource.data.name, 200)
+        && request.resource.data.type in ['patron', 'client_particulier', 'entreprise']
+        && hasTimestamps(request.resource.data);
+
+      allow update: if isOwner(userId)
+        && isValidString(request.resource.data.name, 200)
+        && request.resource.data.type in ['patron', 'client_particulier', 'entreprise']
+        && hasTimestamps(request.resource.data)
+        && createdAtUnchanged();
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ========================================
+    // PROJECTS (Chantiers)
+    // ========================================
+    match /users/{userId}/projects/{projectId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && isValidString(request.resource.data.clientId, 100)
+        && isValidString(request.resource.data.label, 200)
+        && request.resource.data.status in ['actif', 'termine', 'en_attente']
+        && hasTimestamps(request.resource.data);
+
+      allow update: if isOwner(userId)
+        && isValidString(request.resource.data.clientId, 100)
+        && isValidString(request.resource.data.label, 200)
+        && request.resource.data.status in ['actif', 'termine', 'en_attente']
+        && hasTimestamps(request.resource.data)
+        && createdAtUnchanged();
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ========================================
+    // WORK ENTRIES
+    // ========================================
+    match /users/{userId}/workEntries/{entryId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && isValidString(request.resource.data.date, 10)
+        && request.resource.data.startTime is int
+        && request.resource.data.startTime >= 0
+        && request.resource.data.startTime <= 1439
+        && request.resource.data.endTime is int
+        && request.resource.data.endTime >= 0
+        && request.resource.data.endTime <= 1439
+        && isPositiveInt(request.resource.data.laborAmountHT)
+        && request.resource.data.billingMode in ['hourly', 'half_day', 'day', 'fixed_job']
+        && isValidString(request.resource.data.clientId, 100)
+        && hasTimestamps(request.resource.data);
+
+      allow update: if isOwner(userId)
+        && isValidString(request.resource.data.date, 10)
+        && request.resource.data.startTime is int
+        && request.resource.data.startTime >= 0
+        && request.resource.data.startTime <= 1439
+        && request.resource.data.endTime is int
+        && request.resource.data.endTime >= 0
+        && request.resource.data.endTime <= 1439
+        && isPositiveInt(request.resource.data.laborAmountHT)
+        && request.resource.data.billingMode in ['hourly', 'half_day', 'day', 'fixed_job']
+        && isValidString(request.resource.data.clientId, 100)
+        && hasTimestamps(request.resource.data)
+        && createdAtUnchanged();
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ========================================
+    // EXPENSES
+    // ========================================
+    match /users/{userId}/expenses/{expenseId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && isValidString(request.resource.data.date, 10)
+        && isValidString(request.resource.data.clientId, 100)
+        && request.resource.data.category in ['materials', 'travel', 'other']
+        && isPositiveInt(request.resource.data.amountHT)
+        && isValidString(request.resource.data.description, 500)
+        && hasTimestamps(request.resource.data);
+
+      allow update: if isOwner(userId)
+        && isValidString(request.resource.data.date, 10)
+        && isValidString(request.resource.data.clientId, 100)
+        && request.resource.data.category in ['materials', 'travel', 'other']
+        && isPositiveInt(request.resource.data.amountHT)
+        && isValidString(request.resource.data.description, 500)
+        && hasTimestamps(request.resource.data)
+        && createdAtUnchanged();
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ========================================
+    // PAYMENTS
+    // ========================================
+    match /users/{userId}/payments/{paymentId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && isValidString(request.resource.data.date, 10)
+        && isValidString(request.resource.data.clientId, 100)
+        && isStrictPositiveInt(request.resource.data.amount)
+        && request.resource.data.method in ['cash', 'virement', 'autre']
+        && hasTimestamps(request.resource.data);
+
+      allow update: if isOwner(userId)
+        && isValidString(request.resource.data.date, 10)
+        && isValidString(request.resource.data.clientId, 100)
+        && isStrictPositiveInt(request.resource.data.amount)
+        && request.resource.data.method in ['cash', 'virement', 'autre']
+        && hasTimestamps(request.resource.data)
+        && createdAtUnchanged();
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ========================================
+    // SETTINGS
+    // ========================================
+    match /users/{userId}/settings/{settingId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+    }
+  }
+}

@@ -1,0 +1,35 @@
+# Configuration for build_runner code generation
+targets:
+  $default:
+    builders:
+      freezed:
+        enabled: true
+        generate_for:
+          - lib/features/auth/**/*.dart
+          - lib/features/clients/**/*.dart
+          - lib/features/projects/**/*.dart
+          - lib/features/work_entries/**/*.dart
+          - lib/features/expenses/**/*.dart
+          - lib/features/payments/**/*.dart
+          - lib/features/reports/**/*.dart
+          - lib/features/settings/**/*.dart
+
+        options:
+          # Use copyWith and union variants
+          union_value_callbacks: true
+          
+      json_serializable:
+        enabled: true
+        generate_for:
+          - lib/**/*.dart
+        options:
+          any_map: false
+          checked: false
+          create_factory: true
+          create_to_json: true
+          disallow_unrecognized_keys: false
+          explicit_to_json: true
+          field_rename: none
+
+          generic_argument_factories: false
+          include_if_null: true
