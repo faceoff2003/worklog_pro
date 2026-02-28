@@ -13,7 +13,7 @@ part of 'project.dart';
 T _$identity<T>(T value) => value;
 
 /// @nodoc
-mixin _$Project implements DiagnosticableTreeMixin {
+mixin _$Project {
   /// Identifiant unique UUID v4.
   String get id;
 
@@ -48,24 +48,6 @@ mixin _$Project implements DiagnosticableTreeMixin {
 
   /// Serializes this Project to a JSON map.
   Map<String, dynamic> toJson();
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    properties
-      ..add(DiagnosticsProperty('type', 'Project'))
-      ..add(DiagnosticsProperty('id', id))
-      ..add(DiagnosticsProperty('clientId', clientId))
-      ..add(DiagnosticsProperty('label', label))
-      ..add(DiagnosticsProperty('address', address))
-      ..add(DiagnosticsProperty('type', type))
-      ..add(DiagnosticsProperty('status', status))
-      ..add(DiagnosticsProperty('notes', notes))
-      ..add(DiagnosticsProperty('technicalNotes', technicalNotes))
-      ..add(DiagnosticsProperty('accessNotes', accessNotes))
-      ..add(DiagnosticsProperty('distanceKm', distanceKm))
-      ..add(DiagnosticsProperty('createdAt', createdAt))
-      ..add(DiagnosticsProperty('updatedAt', updatedAt));
-  }
 
   @override
   bool operator ==(Object other) {
@@ -110,7 +92,7 @@ mixin _$Project implements DiagnosticableTreeMixin {
       updatedAt);
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Project(id: $id, clientId: $clientId, label: $label, address: $address, type: $type, status: $status, notes: $notes, technicalNotes: $technicalNotes, accessNotes: $accessNotes, distanceKm: $distanceKm, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 }
@@ -447,7 +429,7 @@ extension ProjectPatterns on Project {
 
 /// @nodoc
 @JsonSerializable()
-class _Project with DiagnosticableTreeMixin implements Project {
+class _Project extends Project {
   const _Project(
       {required this.id,
       required this.clientId,
@@ -460,7 +442,8 @@ class _Project with DiagnosticableTreeMixin implements Project {
       this.accessNotes,
       this.distanceKm,
       required this.createdAt,
-      required this.updatedAt});
+      required this.updatedAt})
+      : super._();
   factory _Project.fromJson(Map<String, dynamic> json) =>
       _$ProjectFromJson(json);
 
@@ -517,24 +500,6 @@ class _Project with DiagnosticableTreeMixin implements Project {
   }
 
   @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    properties
-      ..add(DiagnosticsProperty('type', 'Project'))
-      ..add(DiagnosticsProperty('id', id))
-      ..add(DiagnosticsProperty('clientId', clientId))
-      ..add(DiagnosticsProperty('label', label))
-      ..add(DiagnosticsProperty('address', address))
-      ..add(DiagnosticsProperty('type', type))
-      ..add(DiagnosticsProperty('status', status))
-      ..add(DiagnosticsProperty('notes', notes))
-      ..add(DiagnosticsProperty('technicalNotes', technicalNotes))
-      ..add(DiagnosticsProperty('accessNotes', accessNotes))
-      ..add(DiagnosticsProperty('distanceKm', distanceKm))
-      ..add(DiagnosticsProperty('createdAt', createdAt))
-      ..add(DiagnosticsProperty('updatedAt', updatedAt));
-  }
-
-  @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
@@ -577,7 +542,7 @@ class _Project with DiagnosticableTreeMixin implements Project {
       updatedAt);
 
   @override
-  String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
+  String toString() {
     return 'Project(id: $id, clientId: $clientId, label: $label, address: $address, type: $type, status: $status, notes: $notes, technicalNotes: $technicalNotes, accessNotes: $accessNotes, distanceKm: $distanceKm, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 }

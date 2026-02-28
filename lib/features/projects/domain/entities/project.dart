@@ -1,5 +1,4 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:flutter/foundation.dart';
 import 'package:worklog_pro/core/constants/constants.dart';
 import 'package:worklog_pro/core/value_objects/value_objects.dart';
 
@@ -13,7 +12,7 @@ part 'project.g.dart';
 /// et optionnellement une distance kilométrique servant au calcul des frais
 /// de déplacement pour les interventions associées.
 @freezed
-class Project with _$Project {
+abstract class Project with _$Project {
   const factory Project({
     /// Identifiant unique UUID v4.
     required String id,
@@ -41,6 +40,8 @@ class Project with _$Project {
     /// Date et heure de la dernière modification des informations du chantier.
     required DateTime updatedAt,
   }) = _Project;
+  
+  const Project._();
 
   factory Project.fromJson(Map<String, dynamic> json) => _$ProjectFromJson(json);
 }

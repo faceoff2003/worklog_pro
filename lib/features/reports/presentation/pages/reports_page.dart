@@ -7,6 +7,8 @@ import 'package:worklog_pro/features/clients/presentation/providers/clients_prov
 import 'package:worklog_pro/features/projects/presentation/providers/projects_provider.dart';
 import 'package:worklog_pro/core/value_objects/money.dart';
 import 'package:worklog_pro/features/pdf/presentation/widgets/pdf_export_sheet.dart';
+import 'package:worklog_pro/features/reports/presentation/providers/excel_provider.dart';
+import 'package:worklog_pro/features/reports/presentation/utils/file_saver_util.dart';
 
 class ReportsPage extends ConsumerWidget {
   const ReportsPage({super.key});
@@ -52,6 +54,65 @@ class ReportsPage extends ConsumerWidget {
     );
   }
 
+  Future<void> _exportExcel(BuildContext context, WidgetRef ref) async {
+    final reportAsync = ref.read(reportDataProvider);
+    final report = reportAsync.valueOrNull;
+
+    if (report == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Attendez la fin du chargement du rapport')),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Génération du fichier Excel en cours...')),
+    );
+
+    try {
+      final filter = ref.read(reportFilterProvider);
+      final clients = ref.read(clientsStreamProvider).valueOrNull ?? [];
+      final client = filter.clientId != null
+          ? clients.where((c) => c.id == filter.clientId).firstOrNull
+          : null;
+
+      final projects = filter.clientId != null
+          ? (ref.read(projectsByClientStreamProvider(filter.clientId!)).valueOrNull ?? [])
+          : [];
+      final project = filter.projectId != null
+          ? projects.where((p) => p.id == filter.projectId).firstOrNull
+          : null;
+
+      final excelService = ref.read(excelExportServiceProvider);
+      final bytes = await excelService.generateExcel(
+        report,
+        client: client,
+        project: project,
+      );
+
+      final dateFormat = DateFormat('yyyyMMdd');
+      final fileName = 'Rapport_${dateFormat.format(report.dateRange.start)}_${dateFormat.format(report.dateRange.end)}.xlsx';
+
+      await FileSaverUtil.saveAndShareFile(
+        bytes: bytes,
+        fileName: fileName,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Export Excel terminé.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur lors de l\'export Excel : $e')),
+        );
+      }
+    }
+  }
+
 
 
   @override
@@ -66,6 +127,11 @@ class ReportsPage extends ConsumerWidget {
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.table_chart),
+            tooltip: 'Exporter en Excel',
+            onPressed: () => _exportExcel(context, ref),
+          ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             tooltip: 'Exporter en PDF',
