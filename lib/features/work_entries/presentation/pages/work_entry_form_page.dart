@@ -116,17 +116,16 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
 
     if (updatePrice && _selectedClientId != null) {
         final clients = await ref.read(clientsStreamProvider.future);
-        try {
-          final client = clients.firstWhere((c) => c.id == _selectedClientId);
+        final client = clients.firstWhereOrNull((c) => c.id == _selectedClientId);
+        if (client != null) {
           final calculatedCost = calculator.calculateLaborCost(
               durationMinutes: duration,
               mode: _billingMode,
               rates: client.defaultRates,
               roundingStep: 15
           );
-          
           _priceController.text = calculatedCost.inEuros.toStringAsFixed(2);
-        } catch (_) {}
+        }
     }
   }
 
@@ -183,7 +182,18 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     final duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
 
     final clients = await ref.read(clientsStreamProvider.future);
-    final client = clients.firstWhere((c) => c.id == _selectedClientId);
+    final client = clients.firstWhereOrNull((c) => c.id == _selectedClientId);
+    if (client == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Client introuvable. Veuillez re-sélectionner le client.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     final tDist = double.tryParse(_travelDistanceController.text.replaceAll(',', '.')) ?? 0.0;
     final tRate = double.tryParse(_travelRateController.text.replaceAll(',', '.')) ?? 0.0;
@@ -200,8 +210,8 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
       clientId: _selectedClientId!,
       projectId: _selectedProjectId,
       billingMode: _billingMode,
-      rateApplied: cost, 
-      laborAmountHT: cost, 
+      rateApplied: cost,
+      laborAmountHT: cost,
       travelDistanceKm: tDist,
       travelRatePerKm: tRate,
       travelAmountHT: tAmount,
@@ -286,13 +296,11 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
                           onChanged: (value) {
                              setState(() => _selectedProjectId = value);
                              if (value != null) {
-                               try {
-                                 final proj = projects.firstWhere((p) => p.id == value);
-                                 if (proj.distanceKm != null) {
-                                   _travelDistanceController.text = proj.distanceKm.toString();
-                                   _recalculate();
-                                 }
-                               } catch (_) {}
+                               final proj = projects.firstWhereOrNull((p) => p.id == value);
+                               if (proj?.distanceKm != null) {
+                                 _travelDistanceController.text = proj!.distanceKm.toString();
+                                 _recalculate();
+                               }
                              }
                           },
                         );
