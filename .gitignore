@@ -1,65 +1,183 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+# ==============================================================
+# .gitignore — worklog_pro (Flutter + Firebase)
+# ==============================================================
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
+# ==============================================================
+# 🔐 SECRETS & SENSITIVE FILES — NEVER COMMIT THESE
+# ==============================================================
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# ==========================================
-# SECRETS AND SENSITIVE CONFIGURATIONS
-# ==========================================
-# Firebase
-android/app/google-services.json
+# Firebase configuration files
+google-services.json
+**/google-services.json
 ios/Runner/GoogleService-Info.plist
-firebase_options.dart
+**/GoogleService-Info.plist
 lib/firebase_options.dart
 
-# Keystore & Android Signing
+# Firebase CLI & emulator
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+database-debug.log
+.firebaserc.local
+
+# Android signing
 *.jks
 *.keystore
 key.properties
 android/key.properties
 android/app/key.properties
+android/app/upload-keystore.jks
+/android/app/upload-keystore.jks
 
 # Environment variables
 .env
 .env.*
+*.env
+.envrc
+
+# Secrets directory
+.secrets/
+secrets/
+
+# Generic secret file patterns
+**/*.secret
+**/*.secret.*
+**/*.pem
+**/*.p12
+**/*.pk8
+**/*.pfx
+**/*_private_key*
+**/*serviceAccountKey*
+
+# ==============================================================
+# 🤖 DART & FLUTTER GENERATED FILES
+# ==============================================================
+
+# Build output
+/build/
+.build/
+.buildlog/
+
+# Dart tool cache
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+
+# Flutter plugin registries (auto-generated on flutter pub get)
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Generated source files (freezed / json_serializable)
+# Uncomment the lines below ONLY if you want to exclude generated files.
+# Most projects commit .g.dart and .freezed.dart for simplicity.
+# *.g.dart
+# *.freezed.dart
+
+# Flutter goldens
+**/failures/
+
+# Dart API docs
+**/doc/api/
+
+# Symbolication
+app.*.symbols
+
+# Obfuscation maps
+app.*.map.json
+
+# iOS Flutter build ID
+**/ios/Flutter/.last_build_id
+
+# ==============================================================
+# 📱 ANDROID BUILD ARTIFACTS
+# ==============================================================
+
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+/android/.gradle/
+/android/captures/
+/android/local.properties
+
+# ==============================================================
+# 🍎 iOS / macOS BUILD ARTIFACTS
+# ==============================================================
+
+/ios/Pods/
+/ios/.symlinks/
+/ios/Flutter/Flutter.framework/
+/ios/Flutter/Flutter.podspec/
+/macos/Pods/
+/macos/.symlinks/
+
+# ==============================================================
+# 🌐 WEB BUILD ARTIFACTS
+# ==============================================================
+
+/web/flutter_service_worker.js
+
+# ==============================================================
+# 💻 IDEs & EDITORS
+# ==============================================================
+
+# IntelliJ / Android Studio
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code (launch.json and tasks.json are useful to keep;
+# uncomment to exclude everything)
+# .vscode/
+.vscode/settings.json
+.vscode/launch.json
+
+# Xcode
+xcuserdata/
+*.xcworkspace/xcshareddata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# ==============================================================
+# 🖥️ OS ARTIFACTS
+# ==============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ==============================================================
+# 📦 MISC
+# ==============================================================
+
+*.class
+*.log
+*.pyc
+*.swp
+.atom/
+.history/
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# Crash / profiling reports
+*.hprof
+
+# Coverage
+coverage/
+lcov.info
