@@ -462,7 +462,6 @@ class _ClientBalanceCard extends ConsumerWidget {
         child: balanceAsync.when(
           data: (balance) {
             final isOwed = balance.balance.amountCents > 0;
-            final isOverpaid = balance.balance.amountCents < 0;
             final isSettled = balance.balance.amountCents == 0;
             
             Color statusColor;
