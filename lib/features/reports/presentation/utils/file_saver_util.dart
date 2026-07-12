@@ -3,9 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-// Pour le téléchargement Web
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'file_saver_stub.dart' if (dart.library.html) 'file_saver_web.dart';
 
 class FileSaverUtil {
   /// Sauvegarde ou partage un fichier (PDF, Excel...) en fonction de la plateforme.
@@ -16,12 +14,7 @@ class FileSaverUtil {
   }) async {
     if (kIsWeb) {
       // Sur le Web, on déclenche le téléchargement du fichier
-      final blob = html.Blob([bytes], mimeType);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      html.AnchorElement(href: url)
-        ..setAttribute('download', fileName)
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      saveFileWeb(bytes, fileName, mimeType);
     } else {
       // Sur mobile/desktop, on sauvegarde dans le dossier temporaire puis on le partage
       final directory = await getTemporaryDirectory();

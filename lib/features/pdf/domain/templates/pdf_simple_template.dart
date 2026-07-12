@@ -71,7 +71,16 @@ class PdfSimpleTemplate {
                   final i = entry.key;
                   final e = entry.value;
                   final bg = i.isEven ? PdfColors.white : PdfColor.fromHex('#F5F5F5');
-                  final taskLabel = e.tasks.isNotEmpty ? e.tasks.join(', ') : _billingLabel(e.billingMode);
+                  String taskLabel;
+                  if (e.notes != null && e.notes!.trim().isNotEmpty) {
+                    taskLabel = e.notes!.trim();
+                  } else if (project != null) {
+                    taskLabel = project.label;
+                  } else if (e.tasks.isNotEmpty) {
+                    taskLabel = e.tasks.join(', ');
+                  } else {
+                    taskLabel = _billingLabel(e.billingMode);
+                  }
                   final hours = e.durationMinutes ~/ 60;
                   final mins = e.durationMinutes % 60;
                   final duration = hours > 0

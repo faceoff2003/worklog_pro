@@ -186,5 +186,23 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow write: if isOwner(userId);
     }
+
+    // ========================================
+    // CLIENT SETTLEMENTS (Remises à zéro de compte)
+    // ========================================
+    match /users/{userId}/client_settlements/{settlementId} {
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && isValidString(request.resource.data.clientId, 100)
+        && isValidString(request.resource.data.date, 10)
+        && request.resource.data.balanceAtSettlement is int
+        && ('createdAt' in request.resource.data);
+
+      // Les soldes ne sont pas modifiables (immuables une fois créés)
+      allow update: if false;
+
+      allow delete: if isOwner(userId);
+    }
   }
 }
