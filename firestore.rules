@@ -264,10 +264,14 @@ service cloud.firestore {
         && request.resource.data.balanceAtSettlement is int
         && ('createdAt' in request.resource.data);
 
-      // Les soldes ne sont pas modifiables (immuables une fois créés)
+      // Les soldes sont immuables une fois créés : ni update, ni delete.
+      // M2 (SECURITY_AUDIT.md) — delete était autorisé au propriétaire,
+      // ce qui permettait de contourner l'immuabilité par delete+recreate.
+      // deleteSettlement() existe côté repository mais n'est appelé par
+      // aucune page/widget de lib/features/clients/presentation/pages/ :
+      // verrouillage à coût fonctionnel nul aujourd'hui.
       allow update: if false;
-
-      allow delete: if isOwner(userId);
+      allow delete: if false;
     }
   }
 }

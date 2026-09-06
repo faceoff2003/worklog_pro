@@ -345,9 +345,9 @@ describe('client_settlements', () => {
     await assertFails(docRef(ownerDb(), 'client_settlements', 'doc1').update({ note: 'x' }));
   });
 
-  test('delete — owner → autorisé (contourne l\'immuabilité, M2 en attente de décision)', async () => {
+  test('delete — owner → refusé (M2 tranché : verrouillé, deleteSettlement() sans UI)', async () => {
     await seed('client_settlements', 'doc1', valid());
-    await assertSucceeds(docRef(ownerDb(), 'client_settlements', 'doc1').delete());
+    await assertFails(docRef(ownerDb(), 'client_settlements', 'doc1').delete());
   });
 
   test('delete — autre utilisateur → refusé', async () => {
