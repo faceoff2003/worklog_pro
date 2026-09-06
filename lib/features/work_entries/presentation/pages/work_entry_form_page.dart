@@ -27,7 +27,8 @@ class WorkEntryFormPage extends ConsumerStatefulWidget {
 
 class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
   final _formKey = GlobalKey<FormState>();
-  
+  final _pauseFieldKey = GlobalKey<FormFieldState<String>>();
+
   // Form State
   late DateOnly _date;
   late TimeOfDay _startTime;
@@ -102,28 +103,48 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     return time.hour * 60 + time.minute;
   }
 
+  /// Validation live du champ Pause : c'est la validation utilisateur
+  /// (message visible pendant la saisie, via `_pauseFieldKey`). Le
+  /// try/catch dans `_recalculate()`/`_save()` n'est qu'un filet pour
+  /// le cas où ce validator serait un jour contourné.
+  String? _validatePause(String? value) {
+    final pause = int.tryParse(value ?? '') ?? 0;
+    final start = _timeOfDayToMinutes(_startTime);
+    final end = _timeOfDayToMinutes(_endTime);
+    if (end <= start) {
+      return 'Heure de fin invalide (doit être après le début)';
+    }
+    if (pause > end - start) {
+      return 'Pause supérieure à la durée travaillée';
+    }
+    return null;
+  }
+
   void _recalculate({bool updatePrice = true}) async {
     final calculator = ref.read(workCalculatorServiceProvider);
-    
+
     final start = _timeOfDayToMinutes(_startTime);
     final end = _timeOfDayToMinutes(_endTime);
     final pause = int.tryParse(_pauseController.text) ?? 0;
-    
+
     int duration;
     try {
       duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
     } on ArgumentError {
       // Saisie transitoire incohérente (horaires/pause en cours de modification) :
-      // on affiche 0 sans planter, _save() bloquera si ça reste invalide.
+      // on affiche 0 sans planter. Le message visible pour l'utilisateur vient
+      // de _validatePause ci-dessus, re-déclenché juste en dessous.
       setState(() {
         _durationMinutes = 0;
       });
+      _pauseFieldKey.currentState?.validate();
       return;
     }
 
     setState(() {
       _durationMinutes = duration;
     });
+    _pauseFieldKey.currentState?.validate();
 
     if (updatePrice && _selectedClientId != null) {
         final clients = await ref.read(clientsStreamProvider.future);
@@ -377,9 +398,11 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
+                      key: _pauseFieldKey,
                       controller: _pauseController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Pause (min)', suffixText: 'min'),
+                      validator: _validatePause,
                       onChanged: (_) => _recalculate(),
                     ),
                   ),
