@@ -240,7 +240,16 @@ Toutes les collections sont **sous-collections de l'utilisateur** : `users/{user
 | updatedAt | timestamp | |
 
 ### `users/{userId}/settings/{settingId}`
-Contient un document `Settings` (Freezed) avec les préférences de l'artisan (tarifs, PDF header, etc.). Pas de validation stricte dans les rules (write libre pour le propriétaire).
+Rule Firestore présente et validée par champ connu (fix R-SEC.2 M5,
+2026-09-06) — **mais collection non alimentée**. `Settings` (Freezed,
+préférences de l'artisan : tarifs, en-tête PDF, thème, arrondi, etc.)
+est en réalité persisté exclusivement en local via `SharedPreferences`
+(`lib/features/settings/data/repositories/settings_repository.dart`,
+clé `app_settings`). Aucun code de l'app n'écrit jamais sur ce chemin
+Firestore. Conséquence produit : les réglages de l'artisan sont
+propres à l'appareil — changement de téléphone, réinstallation ou
+perte de l'appareil = réglages reperdus (profil, en-tête PDF, tarifs
+par défaut, thème). Voir § Dette, sprint `F-SETTINGS`.
 
 ---
 
@@ -361,6 +370,28 @@ Seules deux routes nommées. **Tout le reste navigue via `MaterialPageRoute` dir
 #### Logique métier dans les widgets
 - **`WorkEntryFormPage._save()`** : calcule les montants et construit `WorkEntry` directement dans le `State`. Devrait être dans un contrôleur ou service.
 - **`ReportsPage`** : mute `reportFilterProvider.notifier.state` directement depuis des callbacks UI.
+
+#### Sprint à planifier — F-SETTINGS (priorité haute)
+**Problème** : `Settings` (profil artisan, en-tête PDF, tarifs par
+défaut, thème, arrondi) est persisté uniquement en local via
+`SharedPreferences` (`lib/features/settings/data/repositories/
+settings_repository.dart`). La collection Firestore
+`users/{userId}/settings` existe et est validée côté rules (R-SEC.2
+M5) mais n'est écrite par aucun code. **Un changement d'appareil, une
+réinstallation ou une perte de téléphone efface silencieusement tous
+les réglages de l'artisan** — aucune sauvegarde cloud.
+
+**Action** : câbler `SettingsRepository` sur Firestore
+(`users/{uid}/settings`), avec migration automatique des
+`SharedPreferences` existantes vers le cloud au premier lancement
+post-mise à jour, et conserver `SharedPreferences` comme cache
+offline (lecture immédiate au démarrage, écriture en arrière-plan
+vers Firestore). Les rules M5 sont déjà en place, aucun travail
+Firestore-rules requis pour ce sprint.
+
+**Priorité** : haute — risque de perte de données utilisateur réelle,
+pas juste de la dette de code. **Hors périmètre R-SEC** (décision du
+2026-09-06, voir `SECURITY_AUDIT.md` M5).
 
 #### `flutter analyze` (post W-FIX1)
 **0 erreur · 0 warning** — 27 `info` acceptés :

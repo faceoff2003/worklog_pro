@@ -128,6 +128,25 @@ d'exposition inter-utilisateurs — mais aucun garde-fou d'intégrité.
 borne de taille sur les champs texte (en-tête PDF, etc.) si le modèle
 `Settings` est stable.
 
+**Statut (2026-09-06)** : fix appliqué (validation de type par champ
+connu + plafonds, voir commit `f2bb600`). **Mais l'audit prod a
+trouvé 0 document dans `users/{userId}/settings`** — pas une base
+vide par accident : `SettingsRepository`
+(`lib/features/settings/data/repositories/settings_repository.dart:6-25`)
+persiste `Settings` exclusivement via `SharedPreferences` (clé
+`app_settings`, JSON local). Aucun code de l'app n'écrit jamais sur
+`users/{userId}/settings` — la rule (et son fix M5) protège une
+collection Firestore qui n'a jamais reçu un seul document en
+production.
+
+**Décision (William, 2026-09-06)** : on garde les rules M5 en l'état
+(elles ne coûtent rien tant que la collection reste vide, et seront
+immédiatement utiles le jour où `SettingsRepository` sera câblé sur
+Firestore) mais on ne câble pas Firestore maintenant. Conséquence
+produit documentée dans `CONTEXT.md` (réglages perdus au changement
+d'appareil) et suivi de la dette dans `CONTEXT.md` § Dette (sprint
+`F-SETTINGS` à planifier, hors périmètre R-SEC).
+
 ---
 
 ## 2. Low
