@@ -1,5 +1,8 @@
 # CONTEXT.md — Audit complet du projet worklog_pro
 > Généré le 2026-04-26 · Mis à jour post W-FIX1 le 2026-04-26
+> **Resynchronisé post-sprint R-SEC le 2026-09-06** (le document était resté
+> figé post W-FIX1 pendant tout le sprint-3 et le sprint R-SEC — voir §9, §10,
+> §12 pour ce qui a changé)
 > Basé exclusivement sur le code source réel
 
 ---
@@ -111,12 +114,13 @@ lib/
 │   ├── settings/      data/domain/presentation
 │   ├── timer/         data/domain/presentation
 │   └── work_entries/  data/domain/presentation
-├── presentation/
-│   └── widgets/       ← DOSSIER VIDE (reliquat)
-└── services/          ← DOSSIER VIDE (reliquat)
 ```
+> `lib/presentation/widgets/` et `lib/services/` (dossiers vides, reliquats)
+> ont été supprimés en R-SEC.3 (2026-09-06).
 
-**Verdict** : Structure feature-first raisonnablement propre. Deux dossiers vides (`lib/presentation/`, `lib/services/`) trahissent un refactoring inachevé. L'absence de `use_cases` est un choix délibéré ou un oubli — dans les deux cas, c'est à documenter.
+**Verdict** : Structure feature-first raisonnablement propre. L'absence de
+`use_cases` est un choix délibéré ou un oubli — dans les deux cas, c'est à
+documenter.
 
 ---
 
@@ -133,9 +137,18 @@ lib/
 - Le **timer** utilise un `StateNotifierProvider` avec persistence via repository local.
 
 ### Incohérences résiduelles
-1. `workEntryStreamProvider` (pour un seul item par ID) retourne `Stream.value(null)` — `watchWorkEntry` non implémenté dans le repository.
-2. Import commenté dans `work_entries_provider.dart` ligne 2 : dead code mineur.
-3. `ReportsPage` mute `reportFilterProvider.notifier.state` directement depuis l'UI sans contrôleur dédié.
+Toutes résolues en R-SEC.3 (2026-09-06) :
+1. ~~`workEntryStreamProvider` retournait `Stream.value(null)`~~ — supprimé (aucun écran n'en dépendait, confirmé par grep avant suppression).
+2. ~~Import commenté dans `work_entries_provider.dart` ligne 2~~ — supprimé.
+3. ~~`ReportsPage` mutait `reportFilterProvider.notifier.state` directement depuis l'UI~~ — extrait vers `ReportFilterController` (`updateDateRange`/`updateClient`/`updateProject`), testé par caractérisation avant/après (`test/features/reports/presentation/providers/report_providers_test.dart`).
+
+Nouveau, à surveiller : `WorkEntryFormPage._save()` a été refactoré en
+R-SEC.3 étape 2 vers `WorkEntryBuilderService`
+(`lib/features/work_entries/domain/services/work_entry_builder_service.dart`,
+fourni via `workEntryBuilderServiceProvider`) — la construction du
+`WorkEntry` (durée, taux appliqué, montant déplacement) n'est plus dans
+le widget. La lecture des controllers/providers et la persistance
+restent dans `_save()`.
 
 ---
 
@@ -251,6 +264,28 @@ propres à l'appareil — changement de téléphone, réinstallation ou
 perte de l'appareil = réglages reperdus (profil, en-tête PDF, tarifs
 par défaut, thème). Voir § Dette, sprint `F-SETTINGS`.
 
+### `users/{userId}/client_settlements/{settlementId}`
+**Absente de ce document jusqu'ici** — ajoutée par le commit
+`sprint-3` (`fcfb531`), jamais reportée dans un audit avant ce
+resync (2026-09-06). Représente une remise à zéro du solde d'un
+client : les prestations/paiements antérieurs à `date` restent
+archivés mais ne comptent plus dans le solde courant affiché.
+
+| Champ | Type | Notes |
+|---|---|---|
+| id | string | UUID v4 |
+| clientId | string | FK → clients |
+| date | string | YYYY-MM-DD — seules les entrées **postérieures** comptent dans le solde courant |
+| balanceAtSettlement | int | centimes (Money), solde au moment de la remise à zéro (archivage) |
+| note | string? | libre |
+| createdAt | timestamp | |
+
+**Immuabilité** : `allow update: if false` (jamais modifiable). `allow
+delete` était initialement ouvert au propriétaire — **verrouillé en
+R-SEC.2 (`allow delete: if false`)** après confirmation que
+`deleteSettlement()` existe dans `settlement_repository_impl.dart`
+mais n'est appelé par aucune page/widget (voir SECURITY_AUDIT.md M2).
+
 ---
 
 ## 6. Features existantes
@@ -271,7 +306,7 @@ par défaut, thème). Voir § Dette, sprint `F-SETTINGS`.
 | HomePage | home | ✅ (dashboard KPIs + graphique CA 6 mois) |
 | ClientsListPage | clients | ✅ |
 | ClientFormPage | clients | ✅ |
-| ClientDetailPage | clients | ✅ |
+| ClientDetailPage | clients | ✅ (+ remise à zéro du solde — `showSettleAccountDialog`, sprint-3) |
 | ProjectsListPage | projects | ✅ |
 | ProjectFormPage | projects | ✅ |
 | ProjectDetailPage | projects | ✅ |
@@ -359,17 +394,26 @@ Seules deux routes nommées. **Tout le reste navigue via `MaterialPageRoute` dir
 | W-FIX1.5 | `rxdart`, `local_auth`, `flutter_secure_storage` inutilisés | Supprimés de `pubspec.yaml` ✅ |
 | W-FIX1.6 | `isOptionalString` dead-code dans `firestore.rules` | Supprimé ✅ |
 
+### Résolue en sprint R-SEC (2026-09-06)
+Sprint sécurité + refactoring, 6 étapes (R-SEC.0 à R-SEC.5). Détail
+complet des findings de sécurité dans `SECURITY_AUDIT.md` (**rules
+commitées mais pas encore déployées** — voir ce document pour le
+statut précis de chaque finding).
+
+| # | Problème | Fix |
+|---|---|---|
+| R-SEC M1 | `WorkCalculatorService.calculateDuration` pouvait renvoyer une durée négative (endTime==startTime+pause, ou pause > durée brute) → `laborAmountHT` négatif rejeté en silence par Firestore | Lève `ArgumentError` ; validation live ajoutée sur le champ Pause (`WorkEntryFormPage._validatePause`) ✅ |
+| R-SEC M2 | `client_settlements` : `allow delete` ouvert au propriétaire, contournait l'immuabilité (delete + recreate) | `allow delete: if false` — confirmé coût fonctionnel nul (`deleteSettlement()` inutilisé par l'UI) ✅ rules commitées, **pas déployées** |
+| R-SEC M3 | `clients.defaultRates` non validé (taux négatif ou mal typé possible) | Validation "absent/null ou positif" par clé (`hour/halfDay/day/fixedJob`) ✅ rules commitées, **pas déployées** |
+| R-SEC M4 | `project.type`, `expense.materialCategory`, `expense.travelMode` sans whitelist | Whitelists ajoutées (pattern absent/null/liste — critique car données réelles avec `materialCategory`/`travelMode` à `null`) ✅ rules commitées, **pas déployées** |
+| R-SEC M5 | `settings` : écriture libre, zéro validation | Validation par champ connu + plafonds de taille ✅ rules commitées, **pas déployées** — collection non alimentée de toute façon (voir §5) |
+| R-SEC (structurel) | Import mort, dossiers vides, provider mort (`workEntryStreamProvider`), logique métier dans `WorkEntryFormPage._save()` et `ReportsPage` | Nettoyés / extraits (`WorkEntryBuilderService`, `ReportFilterController`) ✅ |
+| R-SEC.4 | 48 `info` `flutter analyze` (dérive depuis les 27 post W-FIX1, jamais retracée avant ce resync) | Nettoyé à 12 (voir tableau plus bas) ✅ |
+
 ### Résiduelle (connue, non bloquante)
 
 #### Code mort / incomplet
-- **`workEntryStreamProvider`** : retourne `Stream.value(null)` — `watchWorkEntry` non implémenté. Impact : aucun écran actuel n'en dépend.
-- **`lib/presentation/widgets/`** et **`lib/services/`** : dossiers vides — vestiges d'un ancien refactoring.
-- **`lib/core/migrations/`** : vide. `schemaVersion: 1` dans `Settings` suggère une mécanique de migration prévue mais non implémentée.
-- Import commenté ligne 2 de `work_entries_provider.dart`.
-
-#### Logique métier dans les widgets
-- **`WorkEntryFormPage._save()`** : calcule les montants et construit `WorkEntry` directement dans le `State`. Devrait être dans un contrôleur ou service.
-- **`ReportsPage`** : mute `reportFilterProvider.notifier.state` directement depuis des callbacks UI.
+- **`lib/core/migrations/`** : vide. `schemaVersion: 1` dans `Settings` suggère une mécanique de migration prévue mais non implémentée — servira à F-SETTINGS (voir plus bas), volontairement non touché pendant R-SEC.
 
 #### Sprint à planifier — F-SETTINGS (priorité haute)
 **Problème** : `Settings` (profil artisan, en-tête PDF, tarifs par
@@ -414,22 +458,55 @@ téléchargement réel. Sortie du périmètre R-SEC.4 (décision du
 2026-09-06) — à traiter en tâche dédiée, avec un test manuel du
 téléchargement web avant/après.
 
-#### `flutter analyze` (post W-FIX1)
-**0 erreur · 0 warning** — 27 `info` acceptés :
+#### `flutter analyze` (post R-SEC.4, 2026-09-06)
+**0 erreur · 0 warning · 12 `info`** (était 27 post W-FIX1, dérivé à 48
+pendant sprint-3 sans jamais être retracé — la principale cause de la
+dérive était `DropdownButtonFormField.value` déprécié par une mise à
+jour du SDK Flutter, 17 occurrences, absente de l'ancien tableau
+ci-dessous car survenue après) :
+
+| Type | Count | Nature |
+|---|---|---|
+| `constant_identifier_names` | 11 | Enums snake_case dans `enums.dart` — **volontaire**, ne jamais toucher (Firestore-safe) |
+| `dart:html` deprecated | 1 | `file_saver_web.dart` — migration `package:web`, tâche à part (voir plus haut), pas un nettoyage mécanique |
+
+Tout le reste (17 `value`→`initialValue`, 10 `prefer_const_*`, 5
+`use_build_context_synchronously`, 2 `unrelated_type_equality_checks`,
+1 `withOpacity`, 1 `unnecessary_to_list_in_spreads` — 36 au total)
+nettoyé en R-SEC.4, un commit par catégorie. Les 2
+`unrelated_type_equality_checks` restants dans les tests Money/DateOnly
+sont volontaires et désormais suppressés par `// ignore:` documenté
+(sinon comptés — voir `test/core/value_objects/`).
+
+Ancien tableau (post W-FIX1, 27 info — historique, dépassé) :
 | Type | Count | Nature |
 |---|---|---|
 | `constant_identifier_names` | 11 | Enums snake_case dans `enums.dart` — volontaire (Firestore-safe) |
 | `use_build_context_synchronously` | 5 | Async UI forms — dette connue |
 | `prefer_const_*` | 8 | Style mineur |
 | `depend_on_referenced_packages` | 2 | `path_provider` maintenant déclaré (résolu) |
-| `dart:html` deprecated | 1 | `file_saver_web.dart` (pas `file_saver_util.dart`) — migration `package:web` à planifier |
+| `dart:html` deprecated | 1 | migration `package:web` à planifier |
 | `withOpacity` deprecated | 1 | → `.withValues()` à migrer |
 | `unnecessary_to_list_in_spreads` | 1 | Style mineur |
 
-#### Tests
-- **1 seul fichier de test** : `test/widget_test.dart` (test généré automatiquement, inutilisable tel quel).
-- Les sous-dossiers `test/core/`, `test/features/`, `test/services/` existent mais sont **vides**.
-- **Couverture de tests : 0%** sur la logique métier. Point de dette le plus critique. Priorité : tester `WorkCalculatorService`.
+#### Tests (post R-SEC, 2026-09-06)
+**291 tests, tous verts** (`flutter test`), répartis dans
+`test/core/value_objects/`, `test/features/*/domain/services/`,
+`test/features/*/presentation/pages/` et
+`test/features/reports/presentation/providers/`. `test/widget_test.dart`
+(smoke test généré, inutilisable) supprimé en R-SEC.0.
+
+**Couverture globale (lignes, `flutter test --coverage`) : ~31 %** —
+chiffre trompeur si lu seul : la logique argent-critique est à 100 %
+(`Money`, `WorkDuration`, `WorkCalculatorService`,
+`WorkEntryBuilderService`), `DateOnly` à 98 % (1 ligne : un `catch`
+mort, voir `SECURITY_AUDIT.md`), `work_entry_form_page.dart` à ~84 %
+grâce aux tests widgets de caractérisation (4 modes de facturation ×
+avec/sans déplacement + divergence création/édition). Les
+repositories, providers Firestore et la plupart des autres pages
+restent à 0 % — **priorité suivante si le sprint continue** : au moins
+un repository (ex. `WorkEntryRepositoryImpl` contre l'émulateur
+Firestore, déjà en place pour les rules).
 
 #### Navigation
 - Navigator 1.0 basique → pas de deep linking, URLs web non partageables.
@@ -438,16 +515,28 @@ téléchargement web avant/après.
 
 ## 10. Sécurité Firestore
 
+> **Audit complet** : `SECURITY_AUDIT.md` (R-SEC.1, 2026-09-06). Ce qui
+> suit est un résumé — se référer à ce document pour le détail par
+> finding et leur statut de déploiement exact.
+
 ### Rules présentes
 ✅ `firestore.rules` est présent et bien structuré.
 
 ### Qualité des rules
-- **Deny-all par défaut** : ✅
+- **Deny-all par défaut** : ✅ (le bloc `match /{document=**} { allow read, write: if false; }` en tête ne fait rien en pratique — Firestore combine les `allow` en OR — mais inoffensif ici, toutes les collections réelles ont une règle explicite)
 - **Isolation stricte par utilisateur** : ✅ toutes les opérations vérifient `isOwner(userId)`
-- **Validation des champs** : ✅ types, longueurs max, valeurs d'enum vérifiés
+- **Validation des champs** : ✅ types, longueurs max, valeurs d'enum vérifiés — étendue en R-SEC.2 à `clients.defaultRates` (M3), `project.type`/`expense.materialCategory`/`expense.travelMode` (M4), `settings` (M5)
 - **Immuabilité de `createdAt`** : ✅ `createdAtUnchanged()` vérifié sur les updates
+- **Immuabilité de `client_settlements`** : ✅ `allow update: if false` **et** `allow delete: if false` depuis R-SEC.2 (M2) — le `delete` était ouvert au propriétaire avant, contournement possible de l'immuabilité par delete+recreate
 - **`ExpenseCategory.food`** : ✅ **corrigé en W-FIX1.1** — `food` dans la whitelist
 - **Dead code `isOptionalString`** : ✅ **supprimé en W-FIX1.6**
+
+**⚠️ Important** : les fixes R-SEC.2 (M2/M3/M4/M5) sont **commités dans
+le repo mais pas déployés sur le projet Firebase `worklog-pro-2b3fb`**.
+`firebase deploy --only firestore:rules` reste à lancer par William —
+volontairement jamais exécuté pendant ce sprint (contrainte explicite,
+voir SECURITY_AUDIT.md). Tant que ce n'est pas fait, la prod tourne
+encore sur les rules d'avant R-SEC.2.
 
 ### Storage rules
 ✅ présentes, deny-all par défaut, lecture/écriture limitées au propriétaire, limite 10MB, types MIME restreints images/PDF.
@@ -472,6 +561,8 @@ téléchargement web avant/après.
 8. **Export double format** : PDF (multiple templates) + Excel dans la même vue rapports.
 9. **Logging production-safe** (post W-FIX1.4) : aucun `debugPrint` en production.
 10. **Sécurité Git** : `.gitignore` complet excluant tous les secrets Firebase, keystores, `.env`.
+11. **Filet de tests sur le code argent-critique** (R-SEC, 2026-09-06) : 100 % sur `Money`/`WorkDuration`/`WorkCalculatorService`/`WorkEntryBuilderService`, tests de caractérisation avant chaque refactoring (`_save()`, filtres de rapports), tests widgets sur `WorkEntryFormPage` (4 modes de facturation × avec/sans déplacement, validation live, création/édition).
+12. **Suite de tests rules Firestore contre l'émulateur** (`firestore-tests/`, `@firebase/rules-unit-testing`) : chaque fix M2-M5 vérifié avant/après sur l'émulateur, jamais déployé sans preuve.
 
 ---
 
@@ -490,19 +581,24 @@ téléchargement web avant/après.
 | Firestore rules cohérentes | ✅ **Corrigées** (W-FIX1.1 + W-FIX1.6) |
 | `firstWhere` protégés | ✅ **Sécurisés** (W-FIX1.2) |
 | Dépendances nettoyées | ✅ **Allégé** (W-FIX1.5) |
-| Tests automatisés | ❌ Aucun (priorité sprint suivant) |
+| Tests automatisés | ✅ **291 tests** (voir §9 Tests) — 0% → couverture ciblée en un sprint (R-SEC) |
 | Deep linking / navigation web | ❌ Navigator 1.0 basique |
-| `flutter analyze` | ✅ 0 erreur · 0 warning · 27 info acceptés |
+| `flutter analyze` | ✅ 0 erreur · 0 warning · **12 info** (dont 11 volontaires) |
+| Rules Firestore M2-M5 (SECURITY_AUDIT.md) | ⚠️ **Corrigées dans le repo, NON déployées** — `firebase deploy` requis (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
+| Build APK release | ✅ Réussi (R-SEC.5, 2026-09-06) |
 
 ### Niveau de stabilité
-**Beta avancée / production-candidat** — Stable et sécurisé pour le déploiement Firebase Hosting / Play Store.
+**Beta avancée / production-candidat** — Stable et sécurisé pour le déploiement Firebase Hosting / Play Store, **à condition de déployer les rules R-SEC.2** (sinon la prod tourne sur les anciennes rules, plus permissives sur `defaultRates`, `settings`, `type`/`materialCategory`/`travelMode`, et sur l'immuabilité de `client_settlements`).
 
 Blocants restants avant prod réelle :
-- Couverture de tests 0% → risque sur les refactorings
+- Rules R-SEC.2 non déployées → décision et action de William
 - Navigation web non déclarative → URLs non partageables
+- Couverture de tests concentrée sur le chemin argent-critique — repositories/providers Firestore et la plupart des pages restent à 0%
 
 ### Prochaines étapes suggérées
-1. **Tests unitaires** : `WorkCalculatorService` en priorité (logique de facturation critique)
-2. **Sprint fonctionnel** : selon roadmap produit (ex: module Devis)
-3. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4)
-4. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR
+1. **Déployer les rules Firestore** (`firebase deploy --only firestore:rules`) — décision de William, voir SECURITY_AUDIT.md.
+2. **Sprint F-SETTINGS** (priorité haute) : câbler `SettingsRepository` sur Firestore, migration `SharedPreferences` → cloud. Voir § Dette.
+3. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
+4. **Étendre la couverture de tests** aux repositories (ex. `WorkEntryRepositoryImpl` contre l'émulateur Firestore) et aux pages à 0%.
+5. **Sprint fonctionnel** : selon roadmap produit (ex: module Devis).
+6. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR.
