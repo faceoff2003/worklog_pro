@@ -66,6 +66,11 @@ secrets/
 .pub-cache/
 .pub/
 
+# ==============================================================
+# 🧪 FIRESTORE RULES TESTS (Node)
+# ==============================================================
+node_modules/
+
 # Flutter plugin registries (auto-generated on flutter pub get)
 .flutter-plugins
 .flutter-plugins-dependencies
