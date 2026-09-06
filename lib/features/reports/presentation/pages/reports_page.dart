@@ -191,7 +191,7 @@ class ReportsPage extends ConsumerWidget {
                 clientsAsync.when(
                   data: (clients) {
                     return DropdownButtonFormField<String?>(
-                      value: filter.clientId,
+                      initialValue: filter.clientId,
                       decoration: const InputDecoration(
                         labelText: 'Client',
                         border: OutlineInputBorder(),
@@ -218,7 +218,7 @@ class ReportsPage extends ConsumerWidget {
                       return projectsAsync.when(
                         data: (projects) {
                           return DropdownButtonFormField<String?>(
-                            value: filter.projectId,
+                            initialValue: filter.projectId,
                             decoration: const InputDecoration(
                               labelText: 'Chantier',
                               border: OutlineInputBorder(),

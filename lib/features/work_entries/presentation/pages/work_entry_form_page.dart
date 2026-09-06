@@ -296,7 +296,7 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
               clientsAsync.when(
                 data: (clients) {
                   return DropdownButtonFormField<String>(
-                    value: _selectedClientId,
+                    initialValue: _selectedClientId,
                     decoration: const InputDecoration(labelText: 'Client *', prefixIcon: Icon(Icons.person)),
                     items: clients.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                     onChanged: (value) {
@@ -320,7 +320,7 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
                     return projectsAsync.when(
                       data: (projects) {
                         return DropdownButtonFormField<String>(
-                          value: _selectedProjectId,
+                          initialValue: _selectedProjectId,
                           decoration: const InputDecoration(labelText: 'Chantier', prefixIcon: Icon(Icons.construction)),
                           items: [
                              const DropdownMenuItem(value: null, child: Text('Aucun / Général')),
@@ -466,7 +466,7 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
                 child: Column(
                   children: [
                     DropdownButtonFormField<BillingMode>(
-                      value: _billingMode,
+                      initialValue: _billingMode,
                       decoration: const InputDecoration(labelText: 'Mode de facturation'),
                       items: BillingMode.values.map((m) => DropdownMenuItem(value: m, child: Text(m.displayName))).toList(),
                       onChanged: (v) {

@@ -194,7 +194,7 @@ class _PaymentFormPageState extends ConsumerState<PaymentFormPage> {
             if (widget.clientId == null)
               clientsAsync.when(
                 data: (clients) => DropdownButtonFormField<String>(
-                  value: _selectedClientId,
+                  initialValue: _selectedClientId,
                   decoration: const InputDecoration(
                     labelText: 'Client',
                     border: OutlineInputBorder(),
@@ -232,7 +232,7 @@ class _PaymentFormPageState extends ConsumerState<PaymentFormPage> {
                   return projectsAsync.when(
                     data: (projects) {
                       return DropdownButtonFormField<String>(
-                        value: _selectedProjectId,
+                        initialValue: _selectedProjectId,
                         decoration: const InputDecoration(
                           labelText: 'Chantier (Optionnel)',
                           border: OutlineInputBorder(),
@@ -297,7 +297,7 @@ class _PaymentFormPageState extends ConsumerState<PaymentFormPage> {
 
             // Method
             DropdownButtonFormField<PaymentMethod>(
-              value: _selectedMethod,
+              initialValue: _selectedMethod,
               decoration: const InputDecoration(
                 labelText: 'Moyen de paiement',
                 border: OutlineInputBorder(),

@@ -230,7 +230,7 @@ class _ProjectFormPageState extends ConsumerState<ProjectFormPage> {
                       final sortedClients = List<Client>.from(clients)
                         ..sort((a, b) => a.name.compareTo(b.name));
                       return DropdownButtonFormField<String>(
-                        value: _selectedClientId,
+                        initialValue: _selectedClientId,
                         decoration: const InputDecoration(
                           labelText: 'Client *',
                           prefixIcon: Icon(Icons.person),
@@ -280,7 +280,7 @@ class _ProjectFormPageState extends ConsumerState<ProjectFormPage> {
                 const SizedBox(height: 16),
 
                 DropdownButtonFormField<ProjectType>(
-                  value: _selectedType,
+                  initialValue: _selectedType,
                   decoration: const InputDecoration(
                     labelText: 'Type de travaux',
                     prefixIcon: Icon(Icons.category),
@@ -295,7 +295,7 @@ class _ProjectFormPageState extends ConsumerState<ProjectFormPage> {
                 const SizedBox(height: 16),
 
                 DropdownButtonFormField<ProjectStatus>(
-                  value: _selectedStatus,
+                  initialValue: _selectedStatus,
                   decoration: const InputDecoration(
                     labelText: 'Statut',
                     prefixIcon: Icon(Icons.info),

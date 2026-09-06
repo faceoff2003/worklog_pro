@@ -280,7 +280,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<ClientType>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Type *',
                   prefixIcon: Icon(Icons.category),
