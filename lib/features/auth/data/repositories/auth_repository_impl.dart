@@ -1,3 +1,5 @@
+import 'dart:developer' as dev;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -141,63 +143,65 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<AppUser> signInWithGoogle() async {
     try {
-      debugPrint('[GoogleSignIn] Starting Google Sign-In flow...');
-      
+      if (kDebugMode) dev.log('Starting Google Sign-In flow...', name: 'Auth');
+
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      
-      debugPrint('[GoogleSignIn] User selected: ${googleUser?.email}');
-      
+
+      if (kDebugMode) dev.log('User selected: ${googleUser?.email}', name: 'Auth');
+
       if (googleUser == null) {
-        debugPrint('[GoogleSignIn] User cancelled sign-in');
+        if (kDebugMode) dev.log('User cancelled sign-in', name: 'Auth');
         throw const AuthException(
           code: 'sign_in_canceled',
           message: 'Connexion annulée par l\'utilisateur',
         );
       }
 
-      debugPrint('[GoogleSignIn] Getting authentication details...');
+      if (kDebugMode) dev.log('Getting authentication details...', name: 'Auth');
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
-      debugPrint('[GoogleSignIn] AccessToken: ${googleAuth.accessToken != null ? "✓" : "✗"}');
-      debugPrint('[GoogleSignIn] IdToken: ${googleAuth.idToken != null ? "✓" : "✗"}');
+      if (kDebugMode) {
+        dev.log('AccessToken: ${googleAuth.accessToken != null ? "✓" : "✗"}', name: 'Auth');
+        dev.log('IdToken: ${googleAuth.idToken != null ? "✓" : "✗"}', name: 'Auth');
+      }
 
       // Check if we have the required tokens (accessToken is valid in 6.x)
       if (googleAuth.accessToken == null && googleAuth.idToken == null) {
-        debugPrint('[GoogleSignIn] ERROR: No tokens received');
+        if (kDebugMode) dev.log('ERROR: No tokens received', name: 'Auth');
         throw const AuthException(
           code: 'missing-tokens',
           message: 'Aucun token reçu de Google',
         );
       }
 
-      debugPrint('[GoogleSignIn] Creating Firebase credential...');
+      if (kDebugMode) dev.log('Creating Firebase credential...', name: 'Auth');
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
-      debugPrint('[GoogleSignIn] Signing in to Firebase...');
+      if (kDebugMode) dev.log('Signing in to Firebase...', name: 'Auth');
       final userCredential = await _auth.signInWithCredential(credential);
-      
-      debugPrint('[GoogleSignIn] Firebase user: ${userCredential.user?.email}');
-      
+
+      if (kDebugMode) dev.log('Firebase user: ${userCredential.user?.email}', name: 'Auth');
+
       if (userCredential.user == null) {
-        debugPrint('[GoogleSignIn] ERROR: No Firebase user returned');
+        if (kDebugMode) dev.log('ERROR: No Firebase user returned', name: 'Auth');
         throw const AuthException(
           code: 'null-user',
           message: 'La connexion a échoué',
         );
       }
 
-      debugPrint('[GoogleSignIn] ✓ Success! Mapping user...');
+      if (kDebugMode) dev.log('✓ Success! Mapping user...', name: 'Auth');
       final appUser = _mapFirebaseUser(userCredential.user!);
-      
-      debugPrint('[GoogleSignIn] Creating/updating user in Firestore...');
+
+      if (kDebugMode) dev.log('Creating/updating user in Firestore...', name: 'Auth');
       await _createUserInFirestore(appUser);
-      
+
       return appUser;
     } on FirebaseAuthException catch (e) {
-      debugPrint('[GoogleSignIn] FirebaseAuthException: ${e.code} - ${e.message}');
+      if (kDebugMode) dev.log('FirebaseAuthException: ${e.code} - ${e.message}', name: 'Auth');
       throw AuthException(
         code: e.code,
         message: e.message ?? 'Unknown error',
@@ -205,7 +209,7 @@ class AuthRepositoryImpl implements AuthRepository {
     } on AuthException {
       rethrow;
     } catch (e) {
-      debugPrint('[GoogleSignIn] Generic error: $e');
+      if (kDebugMode) dev.log('Generic error: $e', name: 'Auth');
       throw AuthException(
         code: 'google-sign-in-error',
         message: 'Erreur lors de la connexion Google: ${e.toString()}',
@@ -219,11 +223,11 @@ class AuthRepositoryImpl implements AuthRepository {
     try {
       final firestore = FirebaseFirestore.instance;
       final userDoc = firestore.collection('users').doc(user.uid);
-      
+
       final docSnapshot = await userDoc.get();
-      
+
       if (!docSnapshot.exists) {
-        debugPrint('[Firestore] Creating new user document for ${user.email}');
+        if (kDebugMode) dev.log('Creating new user document for ${user.email}', name: 'Auth');
         await userDoc.set({
           'email': user.email,
           'displayName': user.displayName,
@@ -232,7 +236,7 @@ class AuthRepositoryImpl implements AuthRepository {
           'updatedAt': FieldValue.serverTimestamp(),
         });
       } else {
-        debugPrint('[Firestore] Updating existing user document');
+        if (kDebugMode) dev.log('Updating existing user document', name: 'Auth');
         await userDoc.update({
           'displayName': user.displayName,
           'photoUrl': user.photoUrl,
@@ -240,7 +244,7 @@ class AuthRepositoryImpl implements AuthRepository {
         });
       }
     } catch (e) {
-      debugPrint('[Firestore] Error creating/updating user: $e');
+      if (kDebugMode) dev.log('Error creating/updating user: $e', name: 'Auth');
     }
   }
 

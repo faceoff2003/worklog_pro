@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:collection/collection.dart';
 import 'package:worklog_pro/core/constants/constants.dart';
 import 'package:worklog_pro/core/value_objects/value_objects.dart';
-import 'package:worklog_pro/features/clients/domain/entities/client.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/clients_provider.dart';
 import 'package:worklog_pro/features/projects/presentation/providers/projects_provider.dart';
 import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
@@ -26,7 +26,8 @@ class WorkEntryFormPage extends ConsumerStatefulWidget {
 
 class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
   final _formKey = GlobalKey<FormState>();
-  
+  final _pauseFieldKey = GlobalKey<FormFieldState<String>>();
+
   // Form State
   late DateOnly _date;
   late TimeOfDay _startTime;
@@ -101,18 +102,48 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     return time.hour * 60 + time.minute;
   }
 
+  /// Validation live du champ Pause : c'est la validation utilisateur
+  /// (message visible pendant la saisie, via `_pauseFieldKey`). Le
+  /// try/catch dans `_recalculate()`/`_save()` n'est qu'un filet pour
+  /// le cas où ce validator serait un jour contourné.
+  String? _validatePause(String? value) {
+    final pause = int.tryParse(value ?? '') ?? 0;
+    final start = _timeOfDayToMinutes(_startTime);
+    final end = _timeOfDayToMinutes(_endTime);
+    if (end <= start) {
+      return 'Heure de fin invalide (doit être après le début)';
+    }
+    if (pause > end - start) {
+      return 'Pause supérieure à la durée travaillée';
+    }
+    return null;
+  }
+
   void _recalculate({bool updatePrice = true}) async {
     final calculator = ref.read(workCalculatorServiceProvider);
-    
+
     final start = _timeOfDayToMinutes(_startTime);
     final end = _timeOfDayToMinutes(_endTime);
     final pause = int.tryParse(_pauseController.text) ?? 0;
-    
-    final duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
-    
+
+    int duration;
+    try {
+      duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
+    } on ArgumentError {
+      // Saisie transitoire incohérente (horaires/pause en cours de modification) :
+      // on affiche 0 sans planter. Le message visible pour l'utilisateur vient
+      // de _validatePause ci-dessus, re-déclenché juste en dessous.
+      setState(() {
+        _durationMinutes = 0;
+      });
+      _pauseFieldKey.currentState?.validate();
+      return;
+    }
+
     setState(() {
       _durationMinutes = duration;
     });
+    _pauseFieldKey.currentState?.validate();
 
     if (updatePrice && _selectedClientId != null) {
         final clients = await ref.read(clientsStreamProvider.future);
@@ -179,7 +210,23 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     final start = _timeOfDayToMinutes(_startTime);
     final end = _timeOfDayToMinutes(_endTime);
     final pause = int.tryParse(_pauseController.text) ?? 0;
-    final duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
+
+    // Pré-vérification pour préserver l'ordre exact des messages d'erreur
+    // (horaires invalides avant client introuvable) : WorkEntryBuilderService
+    // refait ce même calcul plus bas lors de la construction.
+    try {
+      calculator.calculateDuration(start, end, pauseMinutes: pause);
+    } on ArgumentError catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Horaires invalides : ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     final clients = await ref.read(clientsStreamProvider.future);
     final client = clients.firstWhereOrNull((c) => c.id == _selectedClientId);
@@ -197,29 +244,24 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
 
     final tDist = double.tryParse(_travelDistanceController.text.replaceAll(',', '.')) ?? 0.0;
     final tRate = double.tryParse(_travelRateController.text.replaceAll(',', '.')) ?? 0.0;
-    // Calculation is (Distance * 2 (Round trip)) * Rate
-    final tAmount = Money.fromEuros((tDist * 2) * tRate);
 
-    final workEntry = WorkEntry(
+    final builder = ref.read(workEntryBuilderServiceProvider);
+    final workEntry = builder.build(
       id: widget.workEntry?.id ?? '',
       date: _date,
       startTime: start,
       endTime: end,
       pauseMinutes: pause,
-      durationMinutes: duration,
       clientId: _selectedClientId!,
       projectId: _selectedProjectId,
       billingMode: _billingMode,
-      rateApplied: cost,
       laborAmountHT: cost,
+      clientDefaultRates: client.defaultRates,
       travelDistanceKm: tDist,
       travelRatePerKm: tRate,
-      travelAmountHT: tAmount,
       notes: _notesController.text,
       createdAt: widget.workEntry?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
-    ).copyWith(
-        rateApplied: _getUnitRate(client.defaultRates, _billingMode)
     );
 
     final controller = ref.read(workEntriesControllerProvider.notifier);
@@ -230,15 +272,6 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     }
 
     if (mounted) Navigator.of(context).pop();
-  }
-
-  Money _getUnitRate(DefaultRates rates, BillingMode mode) {
-    switch (mode) {
-      case BillingMode.hourly: return rates.hour ?? Money.zero;
-      case BillingMode.half_day: return rates.halfDay ?? Money.zero;
-      case BillingMode.day: return rates.day ?? Money.zero;
-      case BillingMode.fixed_job: return rates.fixedJob ?? Money.zero;
-    }
   }
 
   @override
@@ -263,7 +296,7 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
               clientsAsync.when(
                 data: (clients) {
                   return DropdownButtonFormField<String>(
-                    value: _selectedClientId,
+                    initialValue: _selectedClientId,
                     decoration: const InputDecoration(labelText: 'Client *', prefixIcon: Icon(Icons.person)),
                     items: clients.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                     onChanged: (value) {
@@ -287,7 +320,7 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
                     return projectsAsync.when(
                       data: (projects) {
                         return DropdownButtonFormField<String>(
-                          value: _selectedProjectId,
+                          initialValue: _selectedProjectId,
                           decoration: const InputDecoration(labelText: 'Chantier', prefixIcon: Icon(Icons.construction)),
                           items: [
                              const DropdownMenuItem(value: null, child: Text('Aucun / Général')),
@@ -352,9 +385,11 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
+                      key: _pauseFieldKey,
                       controller: _pauseController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Pause (min)', suffixText: 'min'),
+                      validator: _validatePause,
                       onChanged: (_) => _recalculate(),
                     ),
                   ),
@@ -431,7 +466,7 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
                 child: Column(
                   children: [
                     DropdownButtonFormField<BillingMode>(
-                      value: _billingMode,
+                      initialValue: _billingMode,
                       decoration: const InputDecoration(labelText: 'Mode de facturation'),
                       items: BillingMode.values.map((m) => DropdownMenuItem(value: m, child: Text(m.displayName))).toList(),
                       onChanged: (v) {

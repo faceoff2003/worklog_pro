@@ -6,7 +6,6 @@ import 'package:worklog_pro/features/clients/presentation/providers/clients_prov
 import 'package:worklog_pro/features/projects/domain/entities/project.dart';
 import 'package:worklog_pro/features/projects/presentation/providers/projects_provider.dart';
 import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
-import 'package:worklog_pro/features/work_entries/domain/services/work_calculator_service.dart';
 import 'package:worklog_pro/features/work_entries/presentation/pages/work_entry_form_page.dart';
 import 'package:worklog_pro/features/work_entries/presentation/providers/work_entries_provider.dart';
 
@@ -22,7 +21,6 @@ class WorkEntryDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const color = Colors.blueAccent;
     final calculator = ref.read(workCalculatorServiceProvider);
     final clientAsync = ref.watch(clientStreamProvider(entry.clientId));
     final AsyncValue<Project?> projectAsync = entry.projectId != null

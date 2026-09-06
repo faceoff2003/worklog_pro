@@ -156,7 +156,7 @@ class PaymentsListPage extends ConsumerWidget {
                         },
                       ),
                     );
-                  }).toList(),
+                  }),
                 ],
               );
             },

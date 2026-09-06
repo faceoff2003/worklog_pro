@@ -4,4 +4,8 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Debug-only: allows cleartext HTTP to the local Firebase emulators
+         (integration_test/app_test.dart). Never merged into release builds. -->
+    <application android:networkSecurityConfig="@xml/network_security_config"/>
 </manifest>

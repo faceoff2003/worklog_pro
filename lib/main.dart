@@ -32,11 +32,12 @@ void main() async {
   // Web     : replace the reCAPTCHA site key with your actual key from the
   //           Firebase Console → App Check → Web → reCAPTCHA v3.
   await FirebaseAppCheck.instance.activate(
+    // ignore: deprecated_member_use
     androidProvider: kDebugMode
         ? AndroidProvider.debug
         : AndroidProvider.playIntegrity,
-    // ignore: avoid_redundant_argument_values
-    webProvider: ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'),
+    // ignore: deprecated_member_use
+    webProvider: ReCaptchaV3Provider('6Lcj3MssAAAAAKsVIuC_yH3Tt-dHWxisQojzYOCB'),
   );
 
   await initializeDateFormatting('fr_FR', null);

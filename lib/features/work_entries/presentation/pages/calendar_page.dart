@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:worklog_pro/core/value_objects/date_only.dart';
-import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
-import 'package:worklog_pro/features/work_entries/presentation/providers/work_entries_provider.dart';
+import 'package:collection/collection.dart';
 import 'package:worklog_pro/core/constants/enums.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/clients_provider.dart';
-import 'package:collection/collection.dart';
-import 'package:intl/intl.dart';
+import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
+import 'package:worklog_pro/features/work_entries/presentation/providers/work_entries_provider.dart';
 
 class CalendarPage extends ConsumerStatefulWidget {
   const CalendarPage({super.key});

@@ -280,7 +280,7 @@ class _ClientFormPageState extends ConsumerState<ClientFormPage> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<ClientType>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Type *',
                   prefixIcon: Icon(Icons.category),
@@ -462,7 +462,6 @@ class _ClientBalanceCard extends ConsumerWidget {
         child: balanceAsync.when(
           data: (balance) {
             final isOwed = balance.balance.amountCents > 0;
-            final isOverpaid = balance.balance.amountCents < 0;
             final isSettled = balance.balance.amountCents == 0;
             
             Color statusColor;
@@ -492,7 +491,7 @@ class _ClientBalanceCard extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
+                        color: statusColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(color: statusColor),
                       ),

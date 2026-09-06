@@ -228,7 +228,7 @@ class _WorkEntryCard extends ConsumerWidget {
                          },
                          itemBuilder: (_) => [
                            const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 8), Text('Modifier')])),
-                           PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400), const SizedBox(width: 8), Text('Supprimer', style: TextStyle(color: Colors.red))])),
+                           PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: Colors.red.shade400), const SizedBox(width: 8), const Text('Supprimer', style: TextStyle(color: Colors.red))])),
                          ],
                        ),
                      ],

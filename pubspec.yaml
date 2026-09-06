@@ -30,10 +30,7 @@ dependencies:
   printing: ^5.13.4
   excel: ^4.0.6
   
-  # Security
-  flutter_secure_storage: ^10.0.0
-  local_auth: ^2.3.0
-  
+
   # Google Drive
   googleapis: ^15.0.0
   google_sign_in: ^6.2.1
@@ -49,9 +46,9 @@ dependencies:
   
   # UUID
   uuid: ^4.5.1
+  path_provider: ^2.1.0
   shared_preferences: ^2.5.3
   table_calendar: ^3.2.0
-  rxdart: ^0.28.0
   share_plus: ^10.1.4
   fl_chart: ^0.70.2
   flutter_local_notifications: ^18.0.1
@@ -65,7 +62,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  
+  integration_test:
+    sdk: flutter
+
   # Code generation
   build_runner: ^2.4.8
   freezed: ^3.1.0

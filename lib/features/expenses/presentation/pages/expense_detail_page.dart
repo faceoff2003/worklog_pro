@@ -21,7 +21,7 @@ class ExpenseDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = Colors.teal;
+    const color = Colors.teal;
     final clientAsync = ref.watch(clientStreamProvider(expense.clientId));
     final AsyncValue<Project?> projectAsync = expense.projectId != null
         ? ref.watch(projectStreamProvider(expense.projectId!))
@@ -72,11 +72,11 @@ class ExpenseDetailPage extends ConsumerWidget {
             ),
             child: Column(
               children: [
-                Icon(Icons.receipt_long_outlined, color: color, size: 40),
+                const Icon(Icons.receipt_long_outlined, color: color, size: 40),
                 const SizedBox(height: 8),
                 Text(
                   expense.amountHT.toEurosString(),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color: color,

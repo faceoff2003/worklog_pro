@@ -169,7 +169,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
                         
                         if (confirm == true) {
                             await ref.read(expensesControllerProvider.notifier).deleteExpense(widget.expense!.id);
-                            if (mounted) Navigator.pop(context);
+                            if (context.mounted) Navigator.pop(context);
                         }
                     },
                 ),
@@ -187,7 +187,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
               clientsAsync.when(
                 data: (clients) {
                   return DropdownButtonFormField<String>(
-                    value: _selectedClientId,
+                    initialValue: _selectedClientId,
                     decoration: const InputDecoration(labelText: 'Client *', prefixIcon: Icon(Icons.person)),
                     items: clients.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                     onChanged: (value) {
@@ -211,7 +211,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
                     return projectsAsync.when(
                       data: (projects) {
                         return DropdownButtonFormField<String>(
-                          value: _selectedProjectId,
+                          initialValue: _selectedProjectId,
                           decoration: const InputDecoration(labelText: 'Chantier', prefixIcon: Icon(Icons.construction)),
                           items: [
                             const DropdownMenuItem(value: null, child: Text('Aucun / Général')),
@@ -245,7 +245,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
 
               // 3. Category & Details
               DropdownButtonFormField<ExpenseCategory>(
-                value: _category,
+                initialValue: _category,
                 decoration: const InputDecoration(labelText: 'Catégorie', prefixIcon: Icon(Icons.category)),
                 items: ExpenseCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.displayName))).toList(),
                 onChanged: (v) => setState(() => _category = v!),
@@ -254,7 +254,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
 
               if (_category == ExpenseCategory.materials) ...[
                 DropdownButtonFormField<MaterialCategory>(
-                  value: _materialCategory,
+                  initialValue: _materialCategory,
                   decoration: const InputDecoration(labelText: 'Type de Matériel'),
                   items: MaterialCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.displayName))).toList(),
                   onChanged: (v) => setState(() => _materialCategory = v),
@@ -268,7 +268,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
 
               if (_category == ExpenseCategory.travel) ...[
                 DropdownButtonFormField<TravelMode>(
-                  value: _travelMode,
+                  initialValue: _travelMode,
                   decoration: const InputDecoration(labelText: 'Mode de Déplacement'),
                   items: TravelMode.values.map((m) => DropdownMenuItem(value: m, child: Text(m.displayName))).toList(),
                   onChanged: (v) => setState(() => _travelMode = v),
