@@ -393,6 +393,27 @@ Firestore-rules requis pour ce sprint.
 pas juste de la dette de code. **Hors périmètre R-SEC** (décision du
 2026-09-06, voir `SECURITY_AUDIT.md` M5).
 
+#### Tâche à part — migration `dart:html` → `package:web`
+**Problème** : `lib/features/reports/presentation/utils/file_saver_web.dart`
+(et non `file_saver_util.dart`, comme indiqué par erreur plus bas dans
+ce document — corrigé ici) utilise `dart:html` (`html.Blob`,
+`html.Url.createObjectUrlFromBlob`, `html.AnchorElement(...).click()`)
+pour déclencher le téléchargement d'un fichier (PDF/Excel) côté Web.
+`dart:html` est déprécié en faveur de `package:web`.
+
+**Ce que ça implique** : ce n'est pas un renommage mécanique comme les
+autres infos de `flutter analyze` (R-SEC.4) — `package:web` a des
+types différents (`web.Blob`, `web.URL.createObjectURL`,
+`web.HTMLAnchorElement`) et demande de l'interop JS
+(`dart:js_interop`) pour convertir la liste d'octets Dart en objet JS.
+Ce code n'est actif que sur Web (`if (kIsWeb)` dans
+`file_saver_util.dart`), une cible secondaire de l'app (Android est la
+cible principale — voir §2 et §12). Non testable dans cet
+environnement : pas de navigateur permettant de vérifier le
+téléchargement réel. Sortie du périmètre R-SEC.4 (décision du
+2026-09-06) — à traiter en tâche dédiée, avec un test manuel du
+téléchargement web avant/après.
+
 #### `flutter analyze` (post W-FIX1)
 **0 erreur · 0 warning** — 27 `info` acceptés :
 | Type | Count | Nature |
@@ -401,7 +422,7 @@ pas juste de la dette de code. **Hors périmètre R-SEC** (décision du
 | `use_build_context_synchronously` | 5 | Async UI forms — dette connue |
 | `prefer_const_*` | 8 | Style mineur |
 | `depend_on_referenced_packages` | 2 | `path_provider` maintenant déclaré (résolu) |
-| `dart:html` deprecated | 1 | `file_saver_util.dart` — migration `package:web` à planifier |
+| `dart:html` deprecated | 1 | `file_saver_web.dart` (pas `file_saver_util.dart`) — migration `package:web` à planifier |
 | `withOpacity` deprecated | 1 | → `.withValues()` à migrer |
 | `unnecessary_to_list_in_spreads` | 1 | Style mineur |
 
@@ -483,5 +504,5 @@ Blocants restants avant prod réelle :
 ### Prochaines étapes suggérées
 1. **Tests unitaires** : `WorkCalculatorService` en priorité (logique de facturation critique)
 2. **Sprint fonctionnel** : selon roadmap produit (ex: module Devis)
-3. **Migration `dart:html`** → `package:web` dans `file_saver_util.dart`
+3. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4)
 4. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR
