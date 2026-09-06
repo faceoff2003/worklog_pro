@@ -19,25 +19,39 @@ void main() {
       expect(service.calculateDuration(480, 1020, pauseMinutes: 30), 510);
     });
 
-    test('retourne 0 si endTime < startTime (jour suivant non géré)', () {
-      expect(service.calculateDuration(1020, 480), 0);
+    test('lève ArgumentError si endTime < startTime (jour suivant non géré)', () {
+      expect(() => service.calculateDuration(1020, 480), throwsArgumentError);
+    });
+
+    test('lève ArgumentError si endTime == startTime (fix M1)', () {
+      expect(() => service.calculateDuration(480, 480), throwsArgumentError);
     });
 
     test(
-      'BUG connu : endTime == startTime avec une pause renvoie une durée '
-      'négative (la garde ne couvre que endTime < startTime, pas ==)',
+      'fix M1 : endTime == startTime avec une pause lève ArgumentError '
+      '(au lieu de renvoyer une durée négative)',
       () {
-        expect(service.calculateDuration(480, 480, pauseMinutes: 10), -10);
+        expect(
+          () => service.calculateDuration(480, 480, pauseMinutes: 10),
+          throwsArgumentError,
+        );
       },
     );
 
     test(
-      'BUG connu : une pause supérieure à la durée brute renvoie une durée '
-      'négative sans être rejetée',
+      'fix M1 : une pause strictement supérieure à la durée brute lève '
+      'ArgumentError (au lieu de renvoyer une durée négative)',
       () {
-        expect(service.calculateDuration(480, 540, pauseMinutes: 90), -30);
+        expect(
+          () => service.calculateDuration(480, 540, pauseMinutes: 90),
+          throwsArgumentError,
+        );
       },
     );
+
+    test('pauseMinutes exactement égal à la durée brute → durée nulle, pas une erreur', () {
+      expect(service.calculateDuration(480, 540, pauseMinutes: 60), 0);
+    });
 
     test('accepte pauseMinutes = 0 explicite', () {
       expect(service.calculateDuration(0, 60, pauseMinutes: 0), 60);

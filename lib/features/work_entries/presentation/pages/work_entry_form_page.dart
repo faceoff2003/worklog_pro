@@ -109,8 +109,18 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     final end = _timeOfDayToMinutes(_endTime);
     final pause = int.tryParse(_pauseController.text) ?? 0;
     
-    final duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
-    
+    int duration;
+    try {
+      duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
+    } on ArgumentError {
+      // Saisie transitoire incohérente (horaires/pause en cours de modification) :
+      // on affiche 0 sans planter, _save() bloquera si ça reste invalide.
+      setState(() {
+        _durationMinutes = 0;
+      });
+      return;
+    }
+
     setState(() {
       _durationMinutes = duration;
     });
@@ -180,7 +190,21 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     final start = _timeOfDayToMinutes(_startTime);
     final end = _timeOfDayToMinutes(_endTime);
     final pause = int.tryParse(_pauseController.text) ?? 0;
-    final duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
+
+    int duration;
+    try {
+      duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
+    } on ArgumentError catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Horaires invalides : ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     final clients = await ref.read(clientsStreamProvider.future);
     final client = clients.firstWhereOrNull((c) => c.id == _selectedClientId);

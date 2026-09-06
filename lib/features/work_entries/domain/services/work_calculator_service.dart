@@ -12,16 +12,26 @@ class WorkCalculatorService {
   ///
   /// [startTime] et [endTime] sont exprimés en minutes écoulées depuis minuit.
   /// Le [pauseMinutes] est soustrait du total.
-  /// Si la fin est avant le début (changement de jour non géré pour l'instant),
-  /// retourne 0 par sécurité.
+  ///
+  /// Lève [ArgumentError] si [endTime] n'est pas strictement après
+  /// [startTime] (changement de jour non géré), ou si [pauseMinutes]
+  /// dépasse la durée brute — dans les deux cas la durée calculée serait
+  /// négative, ce qui produirait un `laborAmountHT` négatif rejeté en
+  /// silence par les rules Firestore (`isPositiveInt`). Aligné sur la
+  /// même convention que [WorkDuration.fromTimeRange].
   int calculateDuration(int startTime, int endTime, {int pauseMinutes = 0}) {
-    if (endTime < startTime) {
-      // Handle overnight? For now assume same day or error.
-      // If end < start, maybe it's next day? 
-      // Let's assume standard single day entry for now.
-      return 0; 
+    if (endTime <= startTime) {
+      throw ArgumentError(
+        'endTime ($endTime) doit être strictement après startTime ($startTime)',
+      );
     }
-    return (endTime - startTime) - pauseMinutes;
+    final rawDuration = endTime - startTime;
+    if (pauseMinutes > rawDuration) {
+      throw ArgumentError(
+        'pauseMinutes ($pauseMinutes) dépasse la durée brute ($rawDuration)',
+      );
+    }
+    return rawDuration - pauseMinutes;
   }
 
   /// Arrondit la durée de travail à un intervalle précis.
