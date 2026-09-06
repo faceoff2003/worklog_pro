@@ -83,6 +83,10 @@ service cloud.firestore {
       return !(field in data) || data[field] == null || data[field] is map;
     }
 
+    function optionalEnum(data, field, allowed) {
+      return !(field in data) || data[field] == null || data[field] in allowed;
+    }
+
     // ========================================
     // USERS - Allow authenticated users to create/manage their own profile
     // ========================================
@@ -124,12 +128,20 @@ service cloud.firestore {
         && isValidString(request.resource.data.clientId, 100)
         && isValidString(request.resource.data.label, 200)
         && request.resource.data.status in ['actif', 'termine', 'en_attente']
+        && optionalEnum(request.resource.data, 'type', [
+          'nouvelle_installation', 'mise_en_conformite', 'depannage',
+          'renovation', 'domotique', 'autre'
+        ])
         && hasTimestamps(request.resource.data);
 
       allow update: if isOwner(userId)
         && isValidString(request.resource.data.clientId, 100)
         && isValidString(request.resource.data.label, 200)
         && request.resource.data.status in ['actif', 'termine', 'en_attente']
+        && optionalEnum(request.resource.data, 'type', [
+          'nouvelle_installation', 'mise_en_conformite', 'depannage',
+          'renovation', 'domotique', 'autre'
+        ])
         && hasTimestamps(request.resource.data)
         && createdAtUnchanged();
 
@@ -184,6 +196,11 @@ service cloud.firestore {
         && request.resource.data.category in ['materials', 'travel', 'food', 'other']
         && isPositiveInt(request.resource.data.amountHT)
         && isValidString(request.resource.data.description, 500)
+        && optionalEnum(request.resource.data, 'materialCategory', [
+          'cables', 'disjoncteurs', 'goulottes', 'outillage', 'luminaires',
+          'prises_interrupteurs', 'tableau', 'autre'
+        ])
+        && optionalEnum(request.resource.data, 'travelMode', ['per_km', 'forfait', 'non_facture'])
         && hasTimestamps(request.resource.data);
 
       allow update: if isOwner(userId)
@@ -192,6 +209,11 @@ service cloud.firestore {
         && request.resource.data.category in ['materials', 'travel', 'food', 'other']
         && isPositiveInt(request.resource.data.amountHT)
         && isValidString(request.resource.data.description, 500)
+        && optionalEnum(request.resource.data, 'materialCategory', [
+          'cables', 'disjoncteurs', 'goulottes', 'outillage', 'luminaires',
+          'prises_interrupteurs', 'tableau', 'autre'
+        ])
+        && optionalEnum(request.resource.data, 'travelMode', ['per_km', 'forfait', 'non_facture'])
         && hasTimestamps(request.resource.data)
         && createdAtUnchanged();
 

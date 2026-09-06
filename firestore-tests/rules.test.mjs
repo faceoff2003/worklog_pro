@@ -220,6 +220,34 @@ testStandardCollection('projects', {
   }),
 });
 
+describe('projects — type whitelist (M4)', () => {
+  const base = () => ({
+    clientId: 'client-1',
+    label: 'Chantier Rue de la Loi',
+    status: 'actif',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  test('type absent du document → accepté', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'projects', 'doc1').set(base()));
+  });
+
+  test('type null → accepté (donnée réelle : le champ existe en base avec des valeurs null)', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'projects', 'doc1').set({ ...base(), type: null }));
+  });
+
+  test('type valeur valide (depannage) → accepté', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'projects', 'doc1').set({ ...base(), type: 'depannage' }));
+  });
+
+  test('type valeur invalide → refusé (M4 corrigé)', async () => {
+    await assertFails(
+      docRef(ownerDb(), 'projects', 'doc1').set({ ...base(), type: 'type_qui_nexiste_pas' }),
+    );
+  });
+});
+
 // ─────────────────────────────────────────────────────────────
 // workEntries
 // ─────────────────────────────────────────────────────────────
@@ -268,6 +296,58 @@ testStandardCollection('expenses', {
     createdAt: new Date(),
     updatedAt: new Date(),
   }),
+});
+
+describe('expenses — materialCategory / travelMode whitelist (M4)', () => {
+  const base = () => ({
+    date: '2026-01-01',
+    clientId: 'client-1',
+    category: 'materials',
+    amountHT: 500,
+    description: 'Câble 3G2.5',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  test('materialCategory absent → accepté', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'expenses', 'doc1').set(base()));
+  });
+
+  test('materialCategory null → accepté (donnée réelle : 4 documents materialCategory null en prod)', async () => {
+    await assertSucceeds(
+      docRef(ownerDb(), 'expenses', 'doc1').set({ ...base(), materialCategory: null }),
+    );
+  });
+
+  test('materialCategory valeur valide (cables) → accepté', async () => {
+    await assertSucceeds(
+      docRef(ownerDb(), 'expenses', 'doc1').set({ ...base(), materialCategory: 'cables' }),
+    );
+  });
+
+  test('materialCategory valeur invalide → refusé (M4 corrigé)', async () => {
+    await assertFails(
+      docRef(ownerDb(), 'expenses', 'doc1').set({ ...base(), materialCategory: 'nexiste_pas' }),
+    );
+  });
+
+  test('travelMode absent → accepté', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'expenses', 'doc1').set(base()));
+  });
+
+  test('travelMode null → accepté (donnée réelle : 14/14 documents travelMode null en prod)', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'expenses', 'doc1').set({ ...base(), travelMode: null }));
+  });
+
+  test('travelMode valeur valide (per_km) → accepté', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'expenses', 'doc1').set({ ...base(), travelMode: 'per_km' }));
+  });
+
+  test('travelMode valeur invalide → refusé (M4 corrigé)', async () => {
+    await assertFails(
+      docRef(ownerDb(), 'expenses', 'doc1').set({ ...base(), travelMode: 'nexiste_pas' }),
+    );
+  });
 });
 
 // ─────────────────────────────────────────────────────────────
