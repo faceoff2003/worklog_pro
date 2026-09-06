@@ -4,6 +4,14 @@
 > Audité sur le code réel (`firestore.rules`, `storage.rules`, `lib/`, historique
 > Git complet), le 2026-09-06. CONTEXT.md utilisé comme piste de départ
 > uniquement — voir §7 pour les écarts constatés avec l'état réel du repo.
+>
+> **Clôture de sprint (R-SEC.5, 2026-09-06)** — statut final : M1 corrigé et
+> livré (code Dart, dans l'APK release). M2/M3/M4/M5 corrigés **dans le
+> repo mais AUCUNE rule n'a été déployée** sur `worklog-pro-2b3fb` pendant
+> ce sprint (contrainte explicite tout du long) — `firebase deploy
+> --only firestore:rules` reste une action de William. Tous les L1-L6 et
+> I1-I5 restent **ouverts, non traités** : le périmètre R-SEC.2 n'a jamais
+> couvert que M1-M5. Voir le statut détaillé sous chaque finding.
 
 ---
 
@@ -54,6 +62,18 @@ explicite avec message utilisateur), et faire remonter les erreurs de
 permission Firestore (`permission-denied`) comme un message visible
 distinct d'une erreur réseau.
 
+**Statut final (R-SEC.3 étape 1, 2026-09-06) : ✅ CORRIGÉ ET LIVRÉ.**
+Décision prise avec William (exception plutôt que clamp ou Result,
+alignée sur la convention de `WorkDuration.fromTimeRange`) :
+`calculateDuration` lève désormais `ArgumentError`. Validation live
+ajoutée sur le champ Pause (`WorkEntryFormPage._validatePause`,
+message visible pendant la saisie, pas seulement au submit) — le
+try/catch au niveau de `_save()`/`_recalculate()` reste un filet, pas
+la validation. Vérifié sur appareil par William (8h00/8h00/10min et
+8h00/12h00/300min). C'est un fix de code Dart (pas une rule Firestore)
+: **inclus dans l'APK release buildé en R-SEC.5**, aucune action de
+déploiement séparée requise.
+
 ### M2 — `client_settlements` : l'immuabilité est contournable par delete + recreate
 **Fichier** : `firestore.rules:193-206`
 
@@ -75,6 +95,16 @@ volontaire (et le documenter comme tel), soit retirer `allow delete` et
 n'autoriser que `create` (les soldes deviennent alors vraiment
 immuables, sans purge possible depuis le client).
 
+**Statut final (R-SEC.2, 2026-09-06) : ✅ CORRIGÉ, ⚠️ NON DÉPLOYÉ.**
+Tranché par William : `allow delete: if false`. Confirmé avant le fix
+que `deleteSettlement()` existe dans `settlement_repository_impl.dart`
+mais n'est appelé par aucune page/widget — coût fonctionnel nul.
+Testé sur l'émulateur (`firestore-tests/`, 92/92 avant, après). **La
+rule est commitée (`firestore.rules`) mais n'a jamais été déployée sur
+`worklog-pro-2b3fb`** — la prod tourne encore avec `allow delete:
+if isOwner(userId)` tant que William n'a pas lancé `firebase deploy
+--only firestore:rules`.
+
 ### M3 — `defaultRates` (clients) entièrement non validé
 **Fichier** : `firestore.rules:57-72`
 
@@ -92,6 +122,14 @@ sans qu'aucune rule ni aucun code Dart n'intercepte l'anomalie.
 `isPositiveInt` (quand présents) dans les rules `clients`, en miroir de
 ce qui est déjà fait pour `laborAmountHT` sur `workEntries`.
 
+**Statut final (R-SEC.2, 2026-09-06) : ✅ CORRIGÉ, ⚠️ NON DÉPLOYÉ.**
+Pattern "absent OU null OU positif" (jamais "obligatoire") par clé,
+vérifié contre la forme réelle des données (`_$DefaultRatesToJson`
+inclut toujours les 4 clés, `null` quand un tarif n'est pas défini —
+un pattern strict aurait cassé tout client existant sans defaultRates
+complet). Testé sur l'émulateur avant/après. **Rule commitée
+(`firestore.rules`), pas déployée** — même statut que M2.
+
 ### M4 — Enums métier sans whitelist dans les rules : `type` (projects), `materialCategory` et `travelMode` (expenses)
 **Fichier** : `firestore.rules` (`projects` §75-94, `expenses` §134-156)
 
@@ -108,6 +146,18 @@ personne ne soit affectée (l'isolation `isOwner` tient).
 
 **Fix proposé** : ajouter les trois whitelists manquantes, à l'identique
 du pattern déjà utilisé pour `billingMode`/`category`/`status`.
+
+**Statut final (R-SEC.2, 2026-09-06) : ✅ CORRIGÉ, ⚠️ NON DÉPLOYÉ.**
+Whitelists ajoutées avec les valeurs complètes de `enums.dart`, pattern
+"absent OU null OU dans la liste" — **rendu obligatoire par les
+données réelles** : le script `scripts/list-distinct-enum-values.mjs`
+lancé par William contre la prod a trouvé 4 documents
+`expense.materialCategory` null et 14/14 documents `expense.travelMode`
+null. Une whitelist stricte (sans tolérance null) aurait bloqué toute
+modification future de ces documents. Filet ajouté d'abord (9 tests
+caractérisant l'acceptation actuelle), vérifié sur les rules non
+modifiées via `git stash` (88/92, seuls les 3 cas visés par le fix
+échouaient), puis 92/92 après. **Rule commitée, pas déployée.**
 
 ### M5 — `settings` : écriture libre, zéro validation de champ
 **Fichier** : `firestore.rules:185-188`
@@ -128,10 +178,11 @@ d'exposition inter-utilisateurs — mais aucun garde-fou d'intégrité.
 borne de taille sur les champs texte (en-tête PDF, etc.) si le modèle
 `Settings` est stable.
 
-**Statut (2026-09-06)** : fix appliqué (validation de type par champ
-connu + plafonds, voir commit `f2bb600`). **Mais l'audit prod a
-trouvé 0 document dans `users/{userId}/settings`** — pas une base
-vide par accident : `SettingsRepository`
+**Statut final (R-SEC.2, 2026-09-06) : ✅ CORRIGÉ, ⚠️ NON DÉPLOYÉ**
+(validation de type par champ connu + plafonds, voir commit
+`f2bb600`). **Mais l'audit prod a trouvé 0 document dans
+`users/{userId}/settings`** — pas une base vide par accident :
+`SettingsRepository`
 (`lib/features/settings/data/repositories/settings_repository.dart:6-25`)
 persiste `Settings` exclusivement via `SharedPreferences` (clé
 `app_settings`, JSON local). Aucun code de l'app n'écrit jamais sur
@@ -150,6 +201,10 @@ d'appareil) et suivi de la dette dans `CONTEXT.md` § Dette (sprint
 ---
 
 ## 2. Low
+
+> **Statut final (2026-09-06) : tous ouverts, non traités.** Le
+> périmètre R-SEC.2 n'a jamais couvert que M1-M5 (décision explicite,
+> pas un oubli). L1-L6 restent des pistes pour un futur sprint sécurité.
 
 ### L1 — Le bloc "deny-all" en tête de `firestore.rules` ne fait rien
 **Fichier** : `firestore.rules:8-10`
@@ -241,6 +296,10 @@ secret — cf. §4), donc ce n'est pas une fuite, mais c'est un fichier
 ---
 
 ## 3. Informational
+
+> **Statut final (2026-09-06) : tous ouverts, non traités**, sauf I5
+> (déjà résolu, rien à faire). I2 et I3 attendent une réponse de
+> William (vérification console Firebase) plutôt qu'un fix de code.
 
 ### I1 — Storage : `contentType` fourni par le client, spoofable
 **Fichier** : `storage.rules:18-23`
@@ -372,8 +431,28 @@ trouvés en auditant le code réel plutôt que le document :
 
 ---
 
-## 7. Prochaine étape
+## 7. Clôture du sprint (R-SEC.5, 2026-09-06)
 
-Aucun fix appliqué dans cette phase. En attente de ta sélection des
-findings à corriger avant R-SEC.2 (tests emulator d'abord, puis fix,
-règle du skill firebase-security-audit).
+### Ce qui est fait
+- **M1** : corrigé et livré (code Dart, dans l'APK release).
+- **M2, M3, M4, M5** : corrigés dans le repo, testés sur l'émulateur
+  Firestore avant/après chaque fix. **Aucune rule déployée.**
+
+### Ce qui reste ouvert
+- **L1-L6, I1-I5** : non traités, hors périmètre de ce sprint (voir
+  §2, §3).
+- **I2** : App Check — enforcement à confirmer côté console Firebase
+  (le client seul ne bloque rien).
+- **I3** : email enumeration protection — réglage Firebase Auth à
+  vérifier côté console.
+- **I4** : dépendances Firebase quelques versions mineures en retard —
+  mise à jour de routine, pas urgente.
+
+### Actions qui reviennent à William
+1. **Déployer les rules** : `firebase deploy --only firestore:rules`
+   pour activer M2/M3/M4/M5 en prod. Sans ça, ce sprint n'a d'effet
+   que sur le repo, pas sur la sécurité réelle de l'app.
+2. Vérifier/activer l'enforcement App Check en console (I2).
+3. Vérifier le réglage "Email Enumeration Protection" en console (I3).
+4. Décider si L1-L6 méritent un futur sprint sécurité, ou restent
+   acceptés en l'état.
