@@ -60,6 +60,29 @@ service cloud.firestore {
       );
     }
 
+    function optionalNonNegativeNumber(data, field) {
+      return !(field in data) || data[field] == null
+        || ((data[field] is int || data[field] is float) && data[field] >= 0);
+    }
+
+    function optionalString(data, field, maxLen) {
+      return !(field in data) || data[field] == null
+        || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function optionalBool(data, field) {
+      return !(field in data) || data[field] == null || data[field] is bool;
+    }
+
+    function optionalListMax(data, field, maxLen) {
+      return !(field in data) || data[field] == null
+        || (data[field] is list && data[field].size() <= maxLen);
+    }
+
+    function optionalMap(data, field) {
+      return !(field in data) || data[field] == null || data[field] is map;
+    }
+
     // ========================================
     // USERS - Allow authenticated users to create/manage their own profile
     // ========================================
@@ -204,7 +227,29 @@ service cloud.firestore {
     // ========================================
     match /users/{userId}/settings/{settingId} {
       allow read: if isOwner(userId);
-      allow write: if isOwner(userId);
+
+      // Validation de type sur les champs connus de Settings (lib/features/
+      // settings/domain/entities/settings.dart), pattern "absent/null ou
+      // valide" pour rester rétrocompatible avec les documents existants.
+      // Plafond de clés + de taille de liste/chaîne en l'absence d'un
+      // contrôle de taille de document natif en rules Firestore.
+      allow write: if isOwner(userId)
+        && optionalPositiveInt(request.resource.data, 'dayHours')
+        && optionalPositiveInt(request.resource.data, 'halfDayHours')
+        && optionalPositiveInt(request.resource.data, 'defaultPauseMinutes')
+        && optionalPositiveInt(request.resource.data, 'roundingMinutes')
+        && optionalNonNegativeNumber(request.resource.data, 'minBillingHours')
+        && optionalPositiveInt(request.resource.data, 'minBillingAmountCents')
+        && optionalString(request.resource.data, 'currency', 10)
+        && optionalString(request.resource.data, 'country', 10)
+        && optionalPositiveInt(request.resource.data, 'travelRatePerKmCents')
+        && optionalListMax(request.resource.data, 'quickTasks', 200)
+        && optionalListMax(request.resource.data, 'quickVendors', 200)
+        && optionalMap(request.resource.data, 'pdfHeader')
+        && optionalBool(request.resource.data, 'autoBackupEnabled')
+        && optionalString(request.resource.data, 'lastBackupAt', 40)
+        && optionalPositiveInt(request.resource.data, 'schemaVersion')
+        && request.resource.data.keys().size() <= 20;
     }
 
     // ========================================

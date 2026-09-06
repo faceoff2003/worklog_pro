@@ -381,10 +381,45 @@ describe('settings', () => {
     await assertSucceeds(docRef(ownerDb(), 'settings', 'doc1').set(reasonable()));
   });
 
-  test('write — payload avec champ mal typé (dayHours: string) → ACCEPTÉ aujourd\'hui (gap M5, pas encore corrigé)', async () => {
-    await assertSucceeds(
+  test('write — payload avec champ mal typé (dayHours: string) → refusé (M5 corrigé)', async () => {
+    await assertFails(
       docRef(ownerDb(), 'settings', 'doc1').set({ ...reasonable(), dayHours: 'huit' }),
     );
+  });
+
+  test('write — document vide {} (doc legacy sans aucun champ connu) → accepté', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'settings', 'doc1').set({}));
+  });
+
+  test('write — un seul champ connu renseigné → accepté', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'settings', 'doc1').set({ schemaVersion: 1 }));
+  });
+
+  test('write — champ inconnu supplémentaire toléré (schéma non fermé) → accepté', async () => {
+    await assertSucceeds(
+      docRef(ownerDb(), 'settings', 'doc1').set({ ...reasonable(), champInconnu: 'ok' }),
+    );
+  });
+
+  test('write — minBillingHours négatif → refusé (M5 corrigé)', async () => {
+    await assertFails(
+      docRef(ownerDb(), 'settings', 'doc1').set({ ...reasonable(), minBillingHours: -1.0 }),
+    );
+  });
+
+  test('write — quickTasks au-delà du plafond (201 éléments) → refusé (M5 corrigé)', async () => {
+    await assertFails(
+      docRef(ownerDb(), 'settings', 'doc1').set({
+        ...reasonable(),
+        quickTasks: Array.from({ length: 201 }, (_, i) => `tâche ${i}`),
+      }),
+    );
+  });
+
+  test('write — plus de 20 clés top-level → refusé (M5 corrigé)', async () => {
+    const bloated = { ...reasonable() };
+    for (let i = 0; i < 20; i += 1) bloated[`champExtra${i}`] = i;
+    await assertFails(docRef(ownerDb(), 'settings', 'doc1').set(bloated));
   });
 
   test('write — autre utilisateur → refusé', async () => {
