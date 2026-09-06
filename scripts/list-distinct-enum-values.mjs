@@ -43,6 +43,23 @@ const projectId = projectIdArg
 initializeApp({ credential: applicationDefault(), projectId });
 const db = getFirestore();
 
+console.log(`Projet Firebase interrogé : ${projectId}`);
+console.log('(passez --project=<id> pour cibler un autre projet)\n');
+
+// A 0-document section must never read like a green light: it can mean
+// either "aucune anomalie" or "mauvais projet / mauvaise collection /
+// base vide" (voir la section settings du R-SEC.2 : 0 document scanné,
+// et c'était bien une base vide — settings n'est jamais écrit sur
+// Firestore, voir lib/features/settings/data/repositories/
+// settings_repository.dart, qui persiste uniquement en SharedPreferences).
+function warnIfEmpty(sectionLabel, totalDocs) {
+  if (totalDocs === 0) {
+    console.log(`  ⚠ AUCUN DOCUMENT SCANNÉ pour "${sectionLabel}". Ce n'est PAS "aucun problème" :`);
+    console.log('    vérifie le projet ciblé, le nom de la sous-collection, et si cette');
+    console.log('    collection est réellement alimentée par l\'app avant d\'en tirer une conclusion.');
+  }
+}
+
 // Known Dart enums (lib/core/constants/enums.dart) — used only to flag
 // values that would need adding to a whitelist, or dead values with no
 // data behind them. Does not filter the report.
@@ -171,6 +188,7 @@ async function auditSettings() {
 function reportSettings(result) {
   console.log(`\n=== settings (audit M5) ===`);
   console.log(`documents scannés : ${result.totalDocs} (plafond rules : ${SETTINGS_KEY_CAP} clés)`);
+  warnIfEmpty('settings', result.totalDocs);
 
   for (const doc of result.docs) {
     const capFlag = doc.overCap ? `  <-- DÉPASSE LE PLAFOND (${SETTINGS_KEY_CAP})` : '';
@@ -236,6 +254,7 @@ async function auditDefaultRates() {
 function reportDefaultRates(result) {
   console.log(`\n=== clients.defaultRates (audit M3) ===`);
   console.log(`documents scannés     : ${result.totalDocs}`);
+  warnIfEmpty('clients.defaultRates', result.totalDocs);
   console.log(`defaultRates absent   : ${result.absentCount} (toléré par le fix M3, pas un problème)`);
   console.log(`documents en violation du fix M3 : ${result.issues.length}`);
   for (const { path, issue } of result.issues) {
@@ -249,6 +268,7 @@ function reportDefaultRates(result) {
 function report(label, knownKey, result) {
   console.log(`\n=== ${label} ===`);
   console.log(`documents scannés : ${result.totalDocs}`);
+  warnIfEmpty(label, result.totalDocs);
   console.log(`champ absent      : ${result.missingKey}`);
   console.log(`champ null        : ${result.nullValue}`);
   if (result.wrongType) console.log(`type inattendu    : ${result.wrongType} (!)`);
