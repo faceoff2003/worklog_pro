@@ -47,22 +47,6 @@ final workEntriesByProjectStreamProvider = StreamProvider.family.autoDispose<Lis
   return repository.watchWorkEntries(projectId: projectId);
 });
 
-// Single work entry
-final workEntryStreamProvider = StreamProvider.family.autoDispose<WorkEntry?, String>((ref, id) {
-  // final repository = ref.watch(workEntryRepositoryProvider);
-  // We need to implement watchWorkEntry in repo if we want real stream for single item, 
-  // currently we only have watchWorkEntries list.
-  // For now, let's return a future, or filter the list stream?
-  // Detailed implementation would require a specific method in repo.
-  // Let's implement it via getWorkEntry Future.
-  // Or better, add watchWorkEntry to repo.
-  
-  // Actually, I missed adding `watchWorkEntry` to the interface/impl.
-  // I'll skip this provider for now or add it to repo.
-  // Let's skip and use get request in controller for editing.
-  return Stream.value(null); 
-});
-
 // --- Controller ---
 
 final workEntriesControllerProvider = StateNotifierProvider<WorkEntriesController, AsyncValue<void>>((ref) {
