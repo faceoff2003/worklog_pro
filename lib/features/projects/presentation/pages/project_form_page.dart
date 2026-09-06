@@ -111,33 +111,37 @@ class _ProjectFormPageState extends ConsumerState<ProjectFormPage> {
     }
 
     final state = ref.read(projectsControllerProvider);
-    if (mounted && !state.hasError) {
-      // Schedule reminder if selected
-      if (_reminderDate != null) {
-        final notifId = project.id.isNotEmpty ? project.id.hashCode : DateTime.now().millisecondsSinceEpoch ~/ 1000;
-        await ref.read(notificationServiceProvider).scheduleReminder(
-          id: notifId,
-          title: 'Rappel Chantier',
-          body: 'Chantier : ${project.label} à venir !',
-          scheduledDate: _reminderDate!,
+    if (state.hasError) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur : ${state.error}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
+      return;
+    }
 
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isEditing ? 'Chantier modifié' : 'Chantier créé'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else if (mounted && state.hasError) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erreur : ${state.error}'),
-          backgroundColor: Colors.red,
-        ),
+    // Schedule reminder if selected
+    if (_reminderDate != null) {
+      final notifId = project.id.isNotEmpty ? project.id.hashCode : DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      await ref.read(notificationServiceProvider).scheduleReminder(
+        id: notifId,
+        title: 'Rappel Chantier',
+        body: 'Chantier : ${project.label} à venir !',
+        scheduledDate: _reminderDate!,
       );
     }
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isEditing ? 'Chantier modifié' : 'Chantier créé'),
+        backgroundColor: Colors.green,
+      ),
+    );
   }
 
   Future<void> _deleteProject() async {
@@ -431,7 +435,7 @@ class _ProjectFormPageState extends ConsumerState<ProjectFormPage> {
                     onTap: () async {
                       // Request notification permission first
                       await ref.read(notificationServiceProvider).requestPermission();
-                      if (!mounted) return;
+                      if (!context.mounted) return;
 
                       final date = await showDatePicker(
                         context: context,
@@ -440,7 +444,7 @@ class _ProjectFormPageState extends ConsumerState<ProjectFormPage> {
                         lastDate: DateTime.now().add(const Duration(days: 365)),
                         locale: const Locale('fr', 'FR'),
                       );
-                      if (date == null || !mounted) return;
+                      if (date == null || !context.mounted) return;
                       final time = await showTimePicker(
                         context: context,
                         initialTime: TimeOfDay.now(),

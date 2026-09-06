@@ -169,7 +169,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
                         
                         if (confirm == true) {
                             await ref.read(expensesControllerProvider.notifier).deleteExpense(widget.expense!.id);
-                            if (mounted) Navigator.pop(context);
+                            if (context.mounted) Navigator.pop(context);
                         }
                     },
                 ),
