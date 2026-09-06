@@ -171,9 +171,7 @@ class ReportsPage extends ConsumerWidget {
                       },
                     );
                     if (picked != null) {
-                      ref.read(reportFilterProvider.notifier).state = filter.copyWith(
-                        dateRange: picked,
-                      );
+                      ref.read(reportFilterProvider.notifier).updateDateRange(picked);
                     }
                   },
                   child: InputDecorator(
@@ -204,14 +202,7 @@ class ReportsPage extends ConsumerWidget {
                         ...clients.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                       ],
                       onChanged: (value) {
-                         // Logic to clear project if client changes is handled in provider or manually here?
-                         // Ideally we clear project if client changes to something incompatible, but mainly if we change client, project filter should probably reset or verify.
-                         // For simplicity, let's reset project when client changes.
-                         ref.read(reportFilterProvider.notifier).state = ReportFilter(
-                           dateRange: filter.dateRange,
-                           clientId: value,
-                           projectId: null, // Reset project
-                         );
+                         ref.read(reportFilterProvider.notifier).updateClient(value);
                       },
                     );
                   },
@@ -239,10 +230,7 @@ class ReportsPage extends ConsumerWidget {
 
                             ],
                             onChanged: (value) {
-                              ref.read(reportFilterProvider.notifier).state = filter.copyWith(
-                                projectId: value,
-                                clearProject: value == null,
-                              );
+                              ref.read(reportFilterProvider.notifier).updateProject(value);
                             },
                           );
                         },

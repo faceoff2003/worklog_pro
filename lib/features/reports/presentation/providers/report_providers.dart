@@ -42,9 +42,36 @@ class ReportFilter {
   }
 }
 
+/// Contrôleur dédié aux transitions du filtre de rapports (extrait de
+/// ReportsPage, qui mutait reportFilterProvider.notifier.state directement
+/// depuis les callbacks UI — R-SEC.3 étape 3).
+class ReportFilterController extends StateNotifier<ReportFilter> {
+  ReportFilterController() : super(ReportFilter.initial());
+
+  void updateDateRange(DateTimeRange dateRange) {
+    state = state.copyWith(dateRange: dateRange);
+  }
+
+  /// Changer de client réinitialise toujours le chantier sélectionné (un
+  /// chantier appartient à un client précis). Constructeur brut plutôt que
+  /// copyWith : `copyWith(clientId: null)` ne pourrait pas distinguer un
+  /// null explicite d'un paramètre omis et laisserait clientId inchangé.
+  void updateClient(String? clientId) {
+    state = ReportFilter(
+      dateRange: state.dateRange,
+      clientId: clientId,
+      projectId: null,
+    );
+  }
+
+  void updateProject(String? projectId) {
+    state = state.copyWith(projectId: projectId, clearProject: projectId == null);
+  }
+}
+
 /// Provider for the filter state
-final reportFilterProvider = StateProvider<ReportFilter>((ref) {
-  return ReportFilter.initial();
+final reportFilterProvider = StateNotifierProvider<ReportFilterController, ReportFilter>((ref) {
+  return ReportFilterController();
 });
 
 /// Provider for report data — rebuilt whenever any sub-stream emits a new value.
