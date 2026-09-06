@@ -289,6 +289,10 @@ void main() {
     });
 
     test('pas égal à un non-Money', () {
+      // Comparaison volontaire entre types différents : on vérifie que
+      // operator== renvoie bien false plutôt que de planter ou de renvoyer
+      // true par erreur. Ne pas "corriger" en retirant cette ligne.
+      // ignore: unrelated_type_equality_checks
       expect(Money.fromCents(100) == 100, isFalse);
     });
   });

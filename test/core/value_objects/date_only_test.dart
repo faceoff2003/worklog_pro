@@ -380,6 +380,10 @@ void main() {
     });
 
     test('n\'est pas égal à un non-DateOnly', () {
+      // Comparaison volontaire entre types différents : on vérifie que
+      // operator== renvoie bien false plutôt que de planter ou de renvoyer
+      // true par erreur. Ne pas "corriger" en retirant cette ligne.
+      // ignore: unrelated_type_equality_checks
       expect(DateOnly.fromString('2026-04-15') == '2026-04-15', isFalse);
     });
   });
