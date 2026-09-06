@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
 import 'package:worklog_pro/core/constants/constants.dart';
 import 'package:worklog_pro/core/value_objects/value_objects.dart';
-import 'package:worklog_pro/features/clients/domain/entities/client.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/clients_provider.dart';
 import 'package:worklog_pro/features/projects/presentation/providers/projects_provider.dart';
 import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
@@ -212,9 +211,11 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     final end = _timeOfDayToMinutes(_endTime);
     final pause = int.tryParse(_pauseController.text) ?? 0;
 
-    int duration;
+    // Pré-vérification pour préserver l'ordre exact des messages d'erreur
+    // (horaires invalides avant client introuvable) : WorkEntryBuilderService
+    // refait ce même calcul plus bas lors de la construction.
     try {
-      duration = calculator.calculateDuration(start, end, pauseMinutes: pause);
+      calculator.calculateDuration(start, end, pauseMinutes: pause);
     } on ArgumentError catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -243,29 +244,24 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
 
     final tDist = double.tryParse(_travelDistanceController.text.replaceAll(',', '.')) ?? 0.0;
     final tRate = double.tryParse(_travelRateController.text.replaceAll(',', '.')) ?? 0.0;
-    // Calculation is (Distance * 2 (Round trip)) * Rate
-    final tAmount = Money.fromEuros((tDist * 2) * tRate);
 
-    final workEntry = WorkEntry(
+    final builder = ref.read(workEntryBuilderServiceProvider);
+    final workEntry = builder.build(
       id: widget.workEntry?.id ?? '',
       date: _date,
       startTime: start,
       endTime: end,
       pauseMinutes: pause,
-      durationMinutes: duration,
       clientId: _selectedClientId!,
       projectId: _selectedProjectId,
       billingMode: _billingMode,
-      rateApplied: cost,
       laborAmountHT: cost,
+      clientDefaultRates: client.defaultRates,
       travelDistanceKm: tDist,
       travelRatePerKm: tRate,
-      travelAmountHT: tAmount,
       notes: _notesController.text,
       createdAt: widget.workEntry?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
-    ).copyWith(
-        rateApplied: _getUnitRate(client.defaultRates, _billingMode)
     );
 
     final controller = ref.read(workEntriesControllerProvider.notifier);
@@ -276,15 +272,6 @@ class _WorkEntryFormPageState extends ConsumerState<WorkEntryFormPage> {
     }
 
     if (mounted) Navigator.of(context).pop();
-  }
-
-  Money _getUnitRate(DefaultRates rates, BillingMode mode) {
-    switch (mode) {
-      case BillingMode.hourly: return rates.hour ?? Money.zero;
-      case BillingMode.half_day: return rates.halfDay ?? Money.zero;
-      case BillingMode.day: return rates.day ?? Money.zero;
-      case BillingMode.fixed_job: return rates.fixedJob ?? Money.zero;
-    }
   }
 
   @override

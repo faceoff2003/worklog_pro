@@ -5,11 +5,16 @@ import 'package:worklog_pro/features/work_entries/data/repositories/work_entry_r
 import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
 import 'package:worklog_pro/features/work_entries/domain/repositories/work_entry_repository.dart';
 import 'package:worklog_pro/features/work_entries/domain/services/work_calculator_service.dart';
+import 'package:worklog_pro/features/work_entries/domain/services/work_entry_builder_service.dart';
 
 // --- Services ---
 
 final workCalculatorServiceProvider = Provider<WorkCalculatorService>((ref) {
   return WorkCalculatorService();
+});
+
+final workEntryBuilderServiceProvider = Provider<WorkEntryBuilderService>((ref) {
+  return WorkEntryBuilderService(ref.watch(workCalculatorServiceProvider));
 });
 
 // --- Repository ---
