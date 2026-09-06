@@ -166,8 +166,8 @@ describe('clients — defaultRates (M3)', () => {
     );
   });
 
-  test('defaultRates.hour négatif → ACCEPTÉ aujourd\'hui (gap M3, pas encore corrigé)', async () => {
-    await assertSucceeds(
+  test('defaultRates.hour négatif → refusé (M3 corrigé)', async () => {
+    await assertFails(
       docRef(ownerDb(), 'clients', 'doc1').set({
         ...base(),
         defaultRates: { hour: -500, halfDay: null, day: null, fixedJob: null },
@@ -175,11 +175,26 @@ describe('clients — defaultRates (M3)', () => {
     );
   });
 
-  test('defaultRates.hour de mauvais type (string) → ACCEPTÉ aujourd\'hui (gap M3, pas encore corrigé)', async () => {
-    await assertSucceeds(
+  test('defaultRates.hour de mauvais type (string) → refusé (M3 corrigé)', async () => {
+    await assertFails(
       docRef(ownerDb(), 'clients', 'doc1').set({
         ...base(),
         defaultRates: { hour: 'gratuit', halfDay: null, day: null, fixedJob: null },
+      }),
+    );
+  });
+
+  test('defaultRates non-map (ex: chaîne) → refusé', async () => {
+    await assertFails(
+      docRef(ownerDb(), 'clients', 'doc1').set({ ...base(), defaultRates: 'invalide' }),
+    );
+  });
+
+  test('defaultRates avec une seule clé renseignée (partiel) → accepté', async () => {
+    await assertSucceeds(
+      docRef(ownerDb(), 'clients', 'doc1').set({
+        ...base(),
+        defaultRates: { hour: 2000 },
       }),
     );
   });

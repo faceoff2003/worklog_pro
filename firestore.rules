@@ -42,6 +42,24 @@ service cloud.firestore {
       return request.resource.data.createdAt == resource.data.createdAt;
     }
 
+    // "Absent OU valide" : un champ optionnel ne doit jamais être obligatoire,
+    // sous peine de rejeter les documents existants qui ne l'ont pas encore.
+    // null est traité comme absent (Money?/int? nul se sérialise en `null`,
+    // la clé reste présente dans le document).
+    function optionalPositiveInt(data, field) {
+      return !(field in data) || data[field] == null || isPositiveInt(data[field]);
+    }
+
+    function validDefaultRates(data) {
+      return !('defaultRates' in data) || data.defaultRates == null || (
+        data.defaultRates is map
+        && optionalPositiveInt(data.defaultRates, 'hour')
+        && optionalPositiveInt(data.defaultRates, 'halfDay')
+        && optionalPositiveInt(data.defaultRates, 'day')
+        && optionalPositiveInt(data.defaultRates, 'fixedJob')
+      );
+    }
+
     // ========================================
     // USERS - Allow authenticated users to create/manage their own profile
     // ========================================
@@ -60,11 +78,13 @@ service cloud.firestore {
       allow create: if isOwner(userId)
         && isValidString(request.resource.data.name, 200)
         && request.resource.data.type in ['patron', 'client_particulier', 'entreprise']
+        && validDefaultRates(request.resource.data)
         && hasTimestamps(request.resource.data);
 
       allow update: if isOwner(userId)
         && isValidString(request.resource.data.name, 200)
         && request.resource.data.type in ['patron', 'client_particulier', 'entreprise']
+        && validDefaultRates(request.resource.data)
         && hasTimestamps(request.resource.data)
         && createdAtUnchanged();
 
