@@ -87,14 +87,14 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Row(
+      title: const Row(
         children: [
-          const Icon(Icons.balance, color: Colors.indigo),
-          const SizedBox(width: 8),
+          Icon(Icons.balance, color: Colors.indigo),
+          SizedBox(width: 8),
           Expanded(
             child: Text(
               'Solder le compte',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
         ],

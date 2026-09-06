@@ -165,7 +165,7 @@ class HomePage extends ConsumerWidget {
                 const SizedBox(height: 24),
 
                 // Revenue chart
-                _SectionHeader(title: 'Chiffre d\'affaires — 6 derniers mois'),
+                const _SectionHeader(title: 'Chiffre d\'affaires — 6 derniers mois'),
                 const SizedBox(height: 10),
                 const _RevenueChart(),
                 const SizedBox(height: 24),
