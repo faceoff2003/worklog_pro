@@ -47,6 +47,8 @@ class _FakeClientRepository implements ClientRepository {
 
 class _FakeClientPortalRepository implements ClientPortalRepository {
   Object? throwOnMirrorWorkEntry;
+  Object? throwOnDeleteMirroredWorkEntry;
+  Object? throwOnDeleteMirroredExpense;
 
   int mirrorWorkEntryCallCount = 0;
   String? lastMirroredWorkEntryPortalUid;
@@ -71,6 +73,7 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
 
   @override
   Future<void> deleteMirroredWorkEntry(String portalUid, String entryId) async {
+    if (throwOnDeleteMirroredWorkEntry != null) throw throwOnDeleteMirroredWorkEntry!;
     deleteMirroredWorkEntryCallCount++;
     lastDeletedWorkEntryId = entryId;
   }
@@ -83,6 +86,7 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
 
   @override
   Future<void> deleteMirroredExpense(String portalUid, String expenseId) async {
+    if (throwOnDeleteMirroredExpense != null) throw throwOnDeleteMirroredExpense!;
     deleteMirroredExpenseCallCount++;
     lastDeletedExpenseId = expenseId;
   }
@@ -246,6 +250,83 @@ void main() {
       clientRepository.throwOnGetClient = Exception('lecture refusée');
 
       await service.mirrorWorkEntry(_workEntry(id: 'entry-1', clientId: 'client-1'));
+    });
+  });
+
+  group('ajout raté vs retrait raté — un retrait raté laisse une donnée exposée, un ajout raté non', () {
+    late List<String> loggedFailures;
+    late ClientPortalMirrorService serviceWithLogging;
+
+    setUp(() {
+      loggedFailures = [];
+      serviceWithLogging = ClientPortalMirrorService(
+        clientRepository: clientRepository,
+        clientPortalRepository: portalRepository,
+        logRemovalFailure: loggedFailures.add,
+      );
+    });
+
+    test('mirrorWorkEntry (ajout) échoue → aucun log (silencieux, pas d\'exposition de donnée)', () async {
+      clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: 'portal-1');
+      portalRepository.throwOnMirrorWorkEntry = Exception('réseau indisponible');
+
+      await serviceWithLogging.mirrorWorkEntry(_workEntry(id: 'entry-1', clientId: 'client-1'));
+
+      expect(loggedFailures, isEmpty);
+    });
+
+    test('removeMirroredWorkEntry échoue → loggé (le document supprimé reste visible côté client)', () async {
+      clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: 'portal-1');
+      portalRepository.throwOnDeleteMirroredWorkEntry = Exception('réseau indisponible');
+
+      await serviceWithLogging.removeMirroredWorkEntry(clientId: 'client-1', entryId: 'entry-1');
+
+      expect(loggedFailures, hasLength(1));
+      expect(loggedFailures.single, contains('entry-1'));
+    });
+
+    test(
+      'mirrorExpense avec isBillable == false (donc un retrait) échoue → loggé, '
+      'pas silencieux : c\'est une dépense non refacturable qui resterait visible',
+      () async {
+        clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: 'portal-1');
+        portalRepository.throwOnDeleteMirroredExpense = Exception('réseau indisponible');
+
+        await serviceWithLogging.mirrorExpense(_expense(id: 'exp-1', clientId: 'client-1', isBillable: false));
+
+        expect(loggedFailures, hasLength(1));
+        expect(loggedFailures.single, contains('exp-1'));
+      },
+    );
+
+    test('mirrorExpense avec isBillable == true (un ajout) échoue → aucun log', () async {
+      clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: 'portal-1');
+      portalRepository.throwOnDeleteMirroredExpense = Exception('ne doit pas être appelé de toute façon');
+
+      await serviceWithLogging.mirrorExpense(_expense(id: 'exp-1', clientId: 'client-1', isBillable: true));
+
+      expect(loggedFailures, isEmpty);
+    });
+
+    test('removeMirroredExpense échoue → loggé', () async {
+      clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: 'portal-1');
+      portalRepository.throwOnDeleteMirroredExpense = Exception('réseau indisponible');
+
+      await serviceWithLogging.removeMirroredExpense(clientId: 'client-1', expenseId: 'exp-1');
+
+      expect(loggedFailures, hasLength(1));
+      expect(loggedFailures.single, contains('exp-1'));
+    });
+
+    test('sans logRemovalFailure injecté (usage réel), un retrait raté ne relance toujours pas l\'exception', () async {
+      clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: 'portal-1');
+      portalRepository.throwOnDeleteMirroredWorkEntry = Exception('réseau indisponible');
+
+      // service (pas serviceWithLogging) utilise le vrai dev.log par défaut,
+      // gaté par kDebugMode — on vérifie seulement l'absence de rethrow ici,
+      // pas le contenu du log réel (dart:developer, hors de portée d'un
+      // test unitaire).
+      await service.removeMirroredWorkEntry(clientId: 'client-1', entryId: 'entry-1');
     });
   });
 }
