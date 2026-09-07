@@ -577,10 +577,11 @@ describe('settings — doc "main" (FirestoreSettingsRepository)', () => {
   );
 
   test(
-    'écriture — updatedAt de mauvais type (int au lieu de string ISO) → accepté quand même : ' +
-      'champ absent de la liste des champs validés par M5, seul le plafond de 20 clés protège (gap à trancher)',
+    'écriture — updatedAt de mauvais type (int au lieu de string ISO) → refusé ' +
+      '(M5 corrigé : updatedAt arbitre les conflits de réconciliation, un type invalide ' +
+      'ferait trancher dans le mauvais sens plutôt que de simplement planter une lecture)',
     async () => {
-      await assertSucceeds(
+      await assertFails(
         docRef(ownerDb(), 'settings', 'main').set({ ...reasonableWithUpdatedAt(), updatedAt: 12345 }),
       );
     },

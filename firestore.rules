@@ -271,6 +271,7 @@ service cloud.firestore {
         && optionalBool(request.resource.data, 'autoBackupEnabled')
         && optionalString(request.resource.data, 'lastBackupAt', 40)
         && optionalPositiveInt(request.resource.data, 'schemaVersion')
+        && optionalString(request.resource.data, 'updatedAt', 40)
         && request.resource.data.keys().size() <= 20;
     }
 
