@@ -19,6 +19,18 @@
 > statut détaillé de M5 plus bas. L1-L6 et I1-I5 restent ouverts, non
 > traités par F-SETTINGS (hors périmètre — sprint de synchronisation
 > cloud des réglages, pas un sprint sécurité).
+>
+> **Mise à jour (sprint C-PORTAL, 2026-09-07)** — nouveau finding **CP1**
+> (Medium), trouvé et corrigé partiellement pendant la construction des
+> rules `clientPortals`, **rules non déployées**. Voir §1 pour le détail.
+
+---
+
+## 0bis. C-PORTAL — résumé
+
+| Sévérité | Nombre |
+|---|---|
+| Medium | 1 (CP1, fix partiel appliqué, résiduel documenté) |
 
 ---
 
@@ -218,6 +230,95 @@ que `lastBackupAt`. Filet d'abord (suite 98 tests reconfirmée verte sur
 les rules avant modification, le test démontrant la tolérance retourné
 pour asserter le refus), puis fix, puis 98/98 après. **Déployé sur
 `worklog-pro-2b3fb` et vérifié sur appareil par William.**
+
+---
+
+## 1bis. C-PORTAL — Medium
+
+### CP1 — `clientPortals/{portalUid}` : `create` permettait à quiconque de s'auto-désigner `artisanUid` sur un `portalUid` de son choix — usurpation de rôle et écriture dans le miroir d'une victime
+**Fichier** : `firestore.rules` (`match /clientPortals/{portalUid}`, bloc `allow create`)
+
+`allow create` ne vérifiait que `request.resource.data.artisanUid ==
+request.auth.uid` (l'auteur se déclare artisan de lui-même) et
+`isValidString(clientId, 100)` — rien n'empêchait de choisir n'importe
+quel `portalUid` (l'ID du document) indépendamment de qui l'écrit.
+`update` était déjà correctement verrouillé (`artisanUid` immuable,
+testé), mais `create` s'applique tant que le document n'existe pas
+encore — y compris sur l'uid d'un vrai artisan qui n'a **jamais** eu de
+portail, puisque son propre uid ne porte alors aucun document
+`clientPortals`.
+
+**Ce qu'un attaquant peut faire, vérifié empiriquement (pas supposé)** :
+1. Connaissant l'uid Firebase d'une victime (un artisan, ou n'importe
+   quel compte), créer `clientPortals/{uid_de_la_victime}` en
+   s'auto-désignant `artisanUid`. **Accepté** avant le fix — confirmé en
+   emulateur (`firestore-tests/rules.test.mjs`, tests marqués
+   "RÉSIDUEL DOCUMENTÉ").
+2. Le rôle applicatif (artisan vs client) étant déterminé uniquement
+   par l'existence de `clientPortals/{monUid}` (voir CONTEXT.md), la
+   victime bascule de rôle perçu à sa prochaine connexion — si c'était
+   un artisan sans portail, il ne peut alors plus atteindre son propre
+   écran d'accueil artisan. **Aucune rule `delete` n'existe sur ce
+   document, pas même pour son propriétaire** (`isOwner(portalUid)`
+   n'a jamais que `get`, jamais `delete`) — la victime elle-même ne
+   peut pas supprimer le document usurpateur. Verrouillage persistant,
+   non réversible depuis l'app, seule une intervention console Firebase
+   (accès projet, pas la victime) peut le défaire.
+3. L'attaquant devient simultanément `isLinkedArtisan(uid_de_la_victime)`
+   (la fonction ne fait que lire `artisanUid` sur ce document qu'il
+   vient de planter) et peut écrire dans
+   `clientPortals/{uid_de_la_victime}/workEntries/...` — confirmé
+   empiriquement, un faux document de prestation accepté dans ce
+   miroir usurpé.
+
+**Ce qu'il lui faut** : un compte authentifié quelconque (auto-inscrit,
+trivial) qui n'a **jamais** son propre `clientPortals/{lui-même}` —
+donc un autre artisan, ou un compte fraîchement créé sans lien
+portail — et connaître l'uid Firebase exact de la victime. Ce dernier
+point est la vraie barrière : l'uid n'est affiché nulle part dans
+l'app à un tiers non lié à ce compte ; il faudrait l'obtenir hors
+bande (capture d'écran, journal, ingénierie sociale, une fuite
+ailleurs). Un **client portail légitime connaît l'uid de son propre
+artisan** (il figure sur son propre profil, `clientPortals/{lui}.artisanUid`,
+lecture normale et nécessaire) — c'est le vecteur le plus réaliste,
+mais **fermé par le fix ci-dessous** : un client portail a par
+définition déjà son propre `clientPortals/{lui-même}`, donc bloqué.
+
+**Fix appliqué** : `!exists(/databases/$(database)/documents/clientPortals/$(request.auth.uid))`
+ajouté à `allow create` — quiconque a déjà son propre profil client
+portail ne peut plus en créer un autre, nulle part. Ferme le vecteur le
+plus réaliste (un client portail malveillant visant son propre
+artisan, dont il connaît légitimement l'uid). Testé empiriquement
+avant/après sur la suite complète (144 → 148 tests, aucune régression
+sur la création légitime d'un profil par un artisan pour un nouveau
+client).
+
+**Ce qui reste ouvert (résiduel, documenté, pas fermé)** : un compte
+qui n'est **pas déjà** client portail (typiquement un autre artisan,
+ou un compte tout juste créé) et qui connaît l'uid exact d'une cible
+peut toujours planter `clientPortals/{cette_cible}` — confirmé
+toujours accepté après le fix (tests "RÉSIDUEL DOCUMENTÉ"). **Non
+fermable par une rule seule** : il n'existe aucun moyen, côté rules,
+de vérifier qu'un compte est "légitimement" un artisan avant sa
+première création de portail — le rôle lui-même n'est défini que par
+l'absence de document `clientPortals`, une propriété qu'on ne peut pas
+transformer en condition positive sans un signal externe (un custom
+claim posé côté serveur, donc une Cloud Function avec Admin SDK —
+explicitement hors périmètre de ce sprint, voir la décision sur la
+création de compte). Documenté ici plutôt que laissé filer sans trace.
+
+**Sévérité — Medium, pas High** : l'impact (verrouillage de rôle
+persistant, non réversible sans accès console) est sérieux, mais la
+précondition (connaître l'uid Firebase exact d'une cible, un
+identifiant qui n'est exposé nulle part dans l'app à un tiers non lié)
+limite fortement l'exploitabilité pratique pour un attaquant
+extérieur. Le vecteur le plus réaliste (un client portail visant son
+propre artisan) est fermé par ce fix.
+
+**Statut : fix partiel déployé dans le repo, non déployé en prod
+(comme toutes les rules C-PORTAL). Résiduel accepté et documenté,
+pas de Cloud Function prévue pour le fermer complètement dans ce
+sprint.**
 
 ---
 

@@ -366,7 +366,24 @@ service cloud.firestore {
       // par get() possible ici).
       allow list: if isAuthenticated() && resource.data.artisanUid == request.auth.uid;
 
+      // !exists(clientPortals/moi) : défense en profondeur — un compte dont
+      // le PROPRE uid a déjà un profil client portail (donc identifié comme
+      // client par l'app, qui déduit le rôle de cette seule existence) ne
+      // peut créer AUCUN clientPortals, nulle part. Sans ça, un client
+      // portail pouvait planter clientPortals/{uid_de_son_choix} en
+      // s'auto-désignant artisanUid — basculant le rôle perçu de la
+      // victime (si son uid n'avait jamais eu ce document) ET devenant
+      // isLinkedArtisan() de cette victime, avec écriture dans son miroir
+      // (les deux vérifiés empiriquement avant ce fix, pas supposés).
+      //
+      // Ne protège QUE contre un attaquant qui est lui-même déjà un client
+      // portail. Un compte artisan quelconque peut toujours squatter l'uid
+      // d'une victime qu'il connaît, puisque son propre uid n'a jamais de
+      // clientPortals/{soi-même} par construction — cette limite résiduelle
+      // est documentée dans SECURITY_AUDIT.md, pas fermable sans Admin SDK
+      // pour vérifier un vrai rôle serveur.
       allow create: if isAuthenticated()
+        && !exists(/databases/$(database)/documents/clientPortals/$(request.auth.uid))
         && request.resource.data.artisanUid == request.auth.uid
         && isValidString(request.resource.data.clientId, 100)
         && request.resource.data.enabled is bool

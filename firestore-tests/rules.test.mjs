@@ -840,12 +840,14 @@ describe('clientPortals — list() filtré pour l\'artisan (réparation d\'un li
     'client portail, requête filtrée par where("artisanUid","==",SON PROPRE uid) → AUTORISÉE mais ' +
       'structurellement toujours vide, PAS refusée — trouvaille, pas une preuve d\'étanchéité complète. ' +
       'Firestore ne prouve la règle que contre les CONTRAINTES de la requête (artisanUid == request.auth.uid, ' +
-      'ce qui est vrai ici) sans savoir qu\'aucun document réel n\'a jamais artisanUid == un uid de client ' +
-      'portail — cette garantie vient de allow create (jamais de allow list qui la referait), pas de cette ' +
-      'règle. Zéro donnée réelle n\'est jamais exposée par cette requête (elle ne peut renvoyer qu\'un document ' +
-      'que ce client aurait lui-même créé en s\'auto-désignant artisanUid — capacité inhabituelle mais sans '+
-      'portée sur les données d\'un autre client ou d\'un artisan), donc jugé non exploitable en l\'état — à ' +
-      'rouvrir si le modèle de données change.',
+      'ce qui est vrai ici), pas contre le contenu réel de la base. CORRECTION après vérification empirique : ' +
+      'la garantie ne vient PAS de allow create (affirmation initialement fausse, un client portail pouvait ' +
+      'créer un document avec artisanUid == lui-même AVANT le fix !exists(clientPortals/moi) — voir le describe ' +
+      '"create" plus bas pour ce test précis, et SECURITY_AUDIT.md pour le résiduel qui subsiste après ce fix). ' +
+      'La garantie tient par auto-confinement : cette requête ne peut renvoyer qu\'un document que CE client a ' +
+      'lui-même créé — jamais les données d\'un autre client ou d\'un artisan — donc non exploitable, mais ' +
+      'depuis ce fix la création de tels documents auto-référentiels est de toute façon bloquée pour un client ' +
+      'portail (elle ne l\'était pas quand ce commentaire a été écrit la première fois).',
     async () => {
       await seedPortal(CLIENT, { artisanUid: ARTISAN });
 
@@ -855,6 +857,77 @@ describe('clientPortals — list() filtré pour l\'artisan (réparation d\'un li
       assert.equal(snap.size, 0);
     },
   );
+
+  test(
+    'create — un client portail (CLIENT, déjà établi comme tel via un clientPortals/{CLIENT} existant) ' +
+      'tente de créer un AUTRE clientPortals en s\'auto-désignant artisanUid == CLIENT → refusé ' +
+      '(!exists(clientPortals/moi) : quiconque a déjà son propre profil client portail ne peut plus en créer)',
+    async () => {
+      await seedPortal(CLIENT, { artisanUid: ARTISAN });
+
+      await assertFails(
+        portalDocRef(clientDb(), 'nouveau-faux-portail').set({
+          artisanUid: CLIENT,
+          clientId: 'peu-importe',
+          enabled: true,
+          createdAt: new Date(),
+        }),
+      );
+    },
+  );
+
+  test(
+    'create — RÉSIDUEL DOCUMENTÉ (SECURITY_AUDIT.md) : un compte ARTISAN quelconque (jamais lui-même client ' +
+      'portail, donc !exists(clientPortals/lui-même) reste vrai) crée clientPortals/{ARTISAN} — l\'uid d\'un ' +
+      'VRAI artisan qui n\'a jamais eu de portail — en s\'auto-désignant artisanUid → toujours AUTORISÉ après ' +
+      'le fix. Le fix ne protège que contre un attaquant qui est déjà lui-même client portail.',
+    async () => {
+      await assertSucceeds(
+        portalDocRef(otherArtisanDb(), ARTISAN).set({
+          artisanUid: OTHER_ARTISAN,
+          clientId: 'peu-importe',
+          enabled: true,
+          createdAt: new Date(),
+        }),
+      );
+    },
+  );
+
+  test(
+    'create — RÉSIDUEL DOCUMENTÉ (suite) : une fois ce document planté, l\'attaquant devient ' +
+      'isLinkedArtisan(ARTISAN) et écrit dans le miroir de la victime — toujours vrai après le fix, même limite',
+    async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await ctx.firestore().collection('clientPortals').doc(ARTISAN).set({
+          artisanUid: OTHER_ARTISAN,
+          clientId: 'peu-importe',
+          enabled: true,
+          createdAt: new Date(),
+        });
+      });
+
+      await assertSucceeds(
+        workEntryRef(otherArtisanDb(), ARTISAN, 'entry-usurpee').set({
+          date: '2026-03-15',
+          laborAmountHT: 5000,
+          billingMode: 'hourly',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+    },
+  );
+
+  test('create — artisan légitime crée le profil de son propre client (jamais lui-même client portail) → toujours autorisé après le fix', async () => {
+    await assertSucceeds(
+      portalDocRef(artisanDb(), 'un-nouveau-client').set({
+        artisanUid: ARTISAN,
+        clientId: 'client-doc-2',
+        enabled: true,
+        createdAt: new Date(),
+      }),
+    );
+  });
 });
 
 describe('clientPortals/{portalUid}/workEntries/{entryId} — miroir', () => {
