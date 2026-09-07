@@ -55,6 +55,9 @@ class FirebasePortalAccountProvisioner implements PortalAccountProvisioner {
       if (e.code == 'email-already-in-use') {
         throw const PortalEmailAlreadyInUseException();
       }
+      if (e.code == 'invalid-email') {
+        throw const PortalInvalidEmailException();
+      }
       rethrow;
     }
   }

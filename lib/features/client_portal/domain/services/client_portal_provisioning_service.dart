@@ -1,14 +1,22 @@
 import 'package:worklog_pro/features/client_portal/domain/repositories/client_portal_repository.dart';
 import 'package:worklog_pro/features/client_portal/domain/services/portal_account_provisioner.dart';
+import 'package:worklog_pro/features/client_portal/domain/services/portal_invite_email_sender.dart';
+import 'package:worklog_pro/features/client_portal/domain/services/secure_password_generator.dart';
 import 'package:worklog_pro/features/clients/domain/repositories/client_repository.dart';
 
 enum ClientPortalProvisioningOutcome {
-  /// Compte créé, profil créé, Client.portalUid lié — tout a réussi.
+  /// Compte créé, profil créé, Client.portalUid lié, email d'accès envoyé —
+  /// tout a réussi.
   success,
 
   /// Étape 1 : l'email est déjà utilisé. Aucun compte créé, rien à
   /// compenser.
   emailAlreadyInUse,
+
+  /// Étape 1 : format d'email invalide. Cas le plus fréquent (faute de
+  /// frappe) après emailAlreadyInUse — issue dédiée, pas confondue avec une
+  /// panne : l'artisan doit savoir que c'est corrigeable de son côté.
+  invalidEmail,
 
   /// Étape 1 : autre échec de création du compte. Aucun compte créé, rien
   /// à compenser.
@@ -26,8 +34,17 @@ enum ClientPortalProvisioningOutcome {
 
   /// Étapes 1 et 2 ont réussi ; l'étape 3 (lier Client.portalUid) a échoué.
   /// Non bloquant — le balayage de réconciliation répare ce lien
-  /// automatiquement au prochain lancement.
+  /// automatiquement au prochain lancement. L'email d'accès est envoyé
+  /// quand même (le client peut se connecter indépendamment de ce lien,
+  /// qui ne sert qu'à l'artisan et au mirroring).
   linkPendingAutomaticRepair,
+
+  /// Compte et profil créés (étape 3 réussie ou non, peu importe) mais
+  /// l'envoi de l'email d'accès a échoué — remplace l'issue de l'étape 3
+  /// quel qu'elle soit, puisque c'est ce qui est réellement actionnable
+  /// pour l'artisan : [portalUid] et [email] du résultat permettent de
+  /// proposer un renvoi (ClientPortalProvisioningService.resendInvite).
+  inviteEmailFailed,
 }
 
 class ClientPortalProvisioningResult {
@@ -51,40 +68,47 @@ class ClientPortalProvisioningResult {
 /// est compensée en cas d'échec de l'étape 2 (clientPortals n'a pas de
 /// allow delete, donc l'étape 2 elle-même n'est jamais compensable) ;
 /// l'étape 3 est non bloquante par conception (le balayage répare).
+///
+/// Le mot de passe est généré ICI (SecurePasswordGenerator, Random.secure())
+/// et n'est JAMAIS accepté en paramètre ni exposé en retour — aucun
+/// appelant ne peut donc l'afficher, le logger ou le stocker par erreur. Le
+/// client définit le sien via l'email d'accès envoyé après l'étape 3
+/// (jamais transmis par l'artisan).
 class ClientPortalProvisioningService {
   final PortalAccountProvisioner Function() _provisionerFactory;
   final ClientPortalRepository _clientPortalRepository;
   final ClientRepository _clientRepository;
+  final PortalInviteEmailSender _inviteEmailSender;
+  final SecurePasswordGenerator _passwordGenerator;
 
   ClientPortalProvisioningService({
     required PortalAccountProvisioner Function() provisionerFactory,
     required ClientPortalRepository clientPortalRepository,
     required ClientRepository clientRepository,
+    required PortalInviteEmailSender inviteEmailSender,
+    SecurePasswordGenerator? passwordGenerator,
   })  : _provisionerFactory = provisionerFactory,
         _clientPortalRepository = clientPortalRepository,
-        _clientRepository = clientRepository;
+        _clientRepository = clientRepository,
+        _inviteEmailSender = inviteEmailSender,
+        _passwordGenerator = passwordGenerator ?? SecurePasswordGenerator();
 
   Future<ClientPortalProvisioningResult> createPortalAccount({
     required String artisanUid,
     required String clientId,
     required String email,
-    required String password,
   }) async {
     final provisioner = _provisionerFactory();
     try {
       final String portalUid;
       try {
-        portalUid = await provisioner.createAccount(email: email, password: password);
+        portalUid = await provisioner.createAccount(email: email, password: _passwordGenerator.generate());
       } on PortalEmailAlreadyInUseException {
-        return ClientPortalProvisioningResult(
-          outcome: ClientPortalProvisioningOutcome.emailAlreadyInUse,
-          email: email,
-        );
+        return ClientPortalProvisioningResult(outcome: ClientPortalProvisioningOutcome.emailAlreadyInUse, email: email);
+      } on PortalInvalidEmailException {
+        return ClientPortalProvisioningResult(outcome: ClientPortalProvisioningOutcome.invalidEmail, email: email);
       } catch (_) {
-        return ClientPortalProvisioningResult(
-          outcome: ClientPortalProvisioningOutcome.authCreationFailed,
-          email: email,
-        );
+        return ClientPortalProvisioningResult(outcome: ClientPortalProvisioningOutcome.authCreationFailed, email: email);
       }
 
       try {
@@ -104,34 +128,48 @@ class ClientPortalProvisioningService {
         );
       }
 
+      var linkOutcome = ClientPortalProvisioningOutcome.linkPendingAutomaticRepair;
       try {
         final client = await _clientRepository.getClient(clientId);
-        if (client == null) {
-          return ClientPortalProvisioningResult(
-            outcome: ClientPortalProvisioningOutcome.linkPendingAutomaticRepair,
-            email: email,
-            portalUid: portalUid,
-          );
+        if (client != null) {
+          await _clientRepository.updateClient(client.copyWith(portalUid: portalUid));
+          linkOutcome = ClientPortalProvisioningOutcome.success;
         }
-        await _clientRepository.updateClient(client.copyWith(portalUid: portalUid));
-        return ClientPortalProvisioningResult(
-          outcome: ClientPortalProvisioningOutcome.success,
-          email: email,
-          portalUid: portalUid,
-        );
+      } catch (_) {
+        // linkOutcome reste linkPendingAutomaticRepair (sa valeur par défaut).
+      }
+
+      // Envoyé que l'étape 3 ait réussi ou non : le client peut se
+      // connecter indépendamment du lien Client.portalUid, qui ne sert
+      // qu'à l'artisan et au mirroring.
+      try {
+        await _inviteEmailSender.sendInvite(email: email);
       } catch (_) {
         return ClientPortalProvisioningResult(
-          outcome: ClientPortalProvisioningOutcome.linkPendingAutomaticRepair,
+          outcome: ClientPortalProvisioningOutcome.inviteEmailFailed,
           email: email,
           portalUid: portalUid,
         );
       }
+
+      return ClientPortalProvisioningResult(outcome: linkOutcome, email: email, portalUid: portalUid);
     } finally {
       // Sur TOUTE la séquence, jamais avant : si l'étape 2 échoue et qu'on
       // compense en supprimant le compte de l'étape 1, il faut être encore
       // connecté dessus sur l'app secondaire — qui n'existerait déjà plus
       // si dispose() avait été appelé à la fin de l'étape 1.
       await provisioner.dispose();
+    }
+  }
+
+  /// Renvoi indépendant, pour l'écran qui gérera un email perdu — sans lui,
+  /// un email égaré rendrait le portail inutilisable sans recours.
+  Future<bool> resendInvite({required String email}) async {
+    try {
+      await _inviteEmailSender.sendInvite(email: email);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
