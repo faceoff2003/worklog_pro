@@ -13,6 +13,7 @@ targets:
           - lib/features/payments/**/*.dart
           - lib/features/reports/**/*.dart
           - lib/features/settings/**/*.dart
+          - lib/features/client_portal/**/*.dart
 
         options:
           # Use copyWith and union variants

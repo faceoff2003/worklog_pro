@@ -18,6 +18,7 @@ _Client _$ClientFromJson(Map<String, dynamic> json) => _Client(
       tags:
           (json['tags'] as List<dynamic>?)?.map((e) => e as String).toList() ??
               const [],
+      portalUid: json['portalUid'] as String?,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -31,6 +32,7 @@ Map<String, dynamic> _$ClientToJson(_Client instance) => <String, dynamic>{
       'notes': instance.notes,
       'defaultRates': instance.defaultRates.toJson(),
       'tags': instance.tags,
+      'portalUid': instance.portalUid,
       'createdAt': instance.createdAt.toIso8601String(),
       'updatedAt': instance.updatedAt.toIso8601String(),
     };

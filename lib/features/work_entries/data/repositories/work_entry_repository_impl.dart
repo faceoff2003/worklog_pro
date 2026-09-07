@@ -1,16 +1,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:worklog_pro/features/client_portal/data/repositories/client_portal_repository_impl.dart';
+import 'package:worklog_pro/features/client_portal/domain/services/client_portal_mirror_service.dart';
+import 'package:worklog_pro/features/clients/data/repositories/client_repository_impl.dart';
 import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
 import 'package:worklog_pro/features/work_entries/domain/repositories/work_entry_repository.dart';
 import 'package:worklog_pro/core/value_objects/value_objects.dart';
 
 class WorkEntryRepositoryImpl implements WorkEntryRepository {
   final String userId;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final Uuid _uuid = const Uuid();
+  final FirebaseFirestore _firestore;
+  final Uuid _uuid;
+  final ClientPortalMirrorService _mirror;
 
-  WorkEntryRepositoryImpl(this.userId);
+  WorkEntryRepositoryImpl(
+    this.userId, {
+    FirebaseFirestore? firestore,
+    Uuid? uuid,
+    ClientPortalMirrorService? mirror,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _uuid = uuid ?? const Uuid(),
+        _mirror = mirror ??
+            ClientPortalMirrorService(
+              clientRepository: ClientRepositoryImpl(),
+              clientPortalRepository: ClientPortalRepositoryImpl(),
+            );
 
   CollectionReference<Map<String, dynamic>> _workEntriesCollection() {
     return _firestore
@@ -113,6 +128,8 @@ class WorkEntryRepositoryImpl implements WorkEntryRepository {
 
     await _workEntriesCollection().doc(id).set(json);
 
+    await _mirror.mirrorWorkEntry(entryWithMeta);
+
     return entryWithMeta;
   }
 
@@ -126,14 +143,25 @@ class WorkEntryRepositoryImpl implements WorkEntryRepository {
 
     final json = entryToUpdate.toJson();
     json.remove('id');
-    
+
     await _workEntriesCollection().doc(workEntry.id).update(json);
+
+    await _mirror.mirrorWorkEntry(entryToUpdate);
 
     return entryToUpdate;
   }
 
   @override
   Future<void> deleteWorkEntry(String id) async {
+    // Lu avant suppression : il faut clientId pour retrouver le portail
+    // éventuel à nettoyer, et deleteWorkEntry(id) ne le reçoit pas en
+    // paramètre (signature de l'interface, inchangée).
+    final existing = await getWorkEntry(id);
+
     await _workEntriesCollection().doc(id).delete();
+
+    if (existing != null) {
+      await _mirror.removeMirroredWorkEntry(clientId: existing.clientId, entryId: id);
+    }
   }
 }

@@ -36,7 +36,13 @@ abstract class Client with _$Client {
     
     /// Étiquettes pour filtrer ou rechercher plus facilement.
     @Default([]) List<String> tags,
-    
+
+    /// uid Firebase Auth du compte portail de ce client, si un accès lui a
+    /// été créé (C-PORTAL). Null = pas de portail. Sert de clé vers
+    /// clientPortals/{portalUid} — jamais l'inverse, ce document ne connaît
+    /// jamais son propre portail avant qu'on le lui attribue explicitement.
+    String? portalUid,
+
     /// Date de création de la fiche.
     required DateTime createdAt,
     

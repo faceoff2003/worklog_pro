@@ -394,6 +394,32 @@ service cloud.firestore {
       allow delete: if isLinkedArtisan(portalUid);
     }
 
+    match /clientPortals/{portalUid}/expenses/{expenseId} {
+      allow read: if isOwner(portalUid) && isPortalEnabled(portalUid);
+
+      // isBillable == true est réaffirmé ici (pas seulement dans
+      // ClientPortalMirrorService côté Dart) : une dépense non refacturable
+      // ne doit jamais apparaître dans le miroir, garanti même si la
+      // logique applicative a un bug — R01, les rôles/garanties se
+      // vérifient côté rules, pas uniquement côté app.
+      allow create: if isLinkedArtisan(portalUid)
+        && isValidString(request.resource.data.date, 10)
+        && isPositiveInt(request.resource.data.amountHT)
+        && isValidString(request.resource.data.description, 500)
+        && request.resource.data.isBillable == true
+        && hasTimestamps(request.resource.data);
+
+      allow update: if isLinkedArtisan(portalUid)
+        && isValidString(request.resource.data.date, 10)
+        && isPositiveInt(request.resource.data.amountHT)
+        && isValidString(request.resource.data.description, 500)
+        && request.resource.data.isBillable == true
+        && hasTimestamps(request.resource.data)
+        && createdAtUnchanged();
+
+      allow delete: if isLinkedArtisan(portalUid);
+    }
+
     match /clientPortals/{portalUid}/workEntries/{entryId}/portalComments/{commentId} {
       // Nom "portalComments" (pas "comments") : évite qu'une future règle
       // collection-group générique sur un nom trop commun ne s'applique

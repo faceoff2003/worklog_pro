@@ -660,11 +660,32 @@ async function seedWorkEntry(portalUid, entryId, overrides = {}) {
   });
 }
 
+async function seedExpense(portalUid, expenseId, overrides = {}) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx
+      .firestore()
+      .collection(`clientPortals/${portalUid}/expenses`)
+      .doc(expenseId)
+      .set({
+        date: '2026-03-15',
+        amountHT: 2000,
+        description: 'Câble 3G2.5',
+        isBillable: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      });
+  });
+}
+
 function portalDocRef(db, portalUid) {
   return db.collection('clientPortals').doc(portalUid);
 }
 function workEntryRef(db, portalUid, entryId) {
   return db.collection(`clientPortals/${portalUid}/workEntries`).doc(entryId);
+}
+function expenseRef(db, portalUid, expenseId) {
+  return db.collection(`clientPortals/${portalUid}/expenses`).doc(expenseId);
 }
 function commentRef(db, portalUid, entryId, commentId) {
   return db.collection(`clientPortals/${portalUid}/workEntries/${entryId}/portalComments`).doc(commentId);
@@ -910,6 +931,71 @@ describe('clientPortals/{portalUid}/workEntries/{entryId} — miroir', () => {
     await seedPortal(CLIENT);
     await seedWorkEntry(CLIENT, 'entry-1');
     await assertFails(workEntryRef(otherArtisanDb(), CLIENT, 'entry-1').delete());
+  });
+});
+
+describe('clientPortals/{portalUid}/expenses/{expenseId} — miroir (isBillable uniquement)', () => {
+  test('create — artisan lié, isBillable true → autorisé', async () => {
+    await seedPortal(CLIENT);
+    await assertSucceeds(
+      expenseRef(artisanDb(), CLIENT, 'exp-1').set({
+        date: '2026-03-15',
+        amountHT: 2000,
+        description: 'Câble 3G2.5',
+        isBillable: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test(
+    'create — artisan lié, isBillable false → refusé (réaffirmé par la règle, pas seulement par le code Dart)',
+    async () => {
+      await seedPortal(CLIENT);
+      await assertFails(
+        expenseRef(artisanDb(), CLIENT, 'exp-1').set({
+          date: '2026-03-15',
+          amountHT: 2000,
+          description: 'Câble 3G2.5',
+          isBillable: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+    },
+  );
+
+  test('create — un artisan NON lié → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(
+      expenseRef(otherArtisanDb(), CLIENT, 'exp-1').set({
+        date: '2026-03-15',
+        amountHT: 2000,
+        description: 'Câble 3G2.5',
+        isBillable: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test('read — client owner, portail activé → autorisé', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await seedExpense(CLIENT, 'exp-1');
+    await assertSucceeds(expenseRef(clientDb(), CLIENT, 'exp-1').get());
+  });
+
+  test('read — client owner, portail désactivé → refusé', async () => {
+    await seedPortal(CLIENT, { enabled: false });
+    await seedExpense(CLIENT, 'exp-1');
+    await assertFails(expenseRef(clientDb(), CLIENT, 'exp-1').get());
+  });
+
+  test('delete — artisan lié → autorisé', async () => {
+    await seedPortal(CLIENT);
+    await seedExpense(CLIENT, 'exp-1');
+    await assertSucceeds(expenseRef(artisanDb(), CLIENT, 'exp-1').delete());
   });
 });
 
