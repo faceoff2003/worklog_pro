@@ -598,3 +598,406 @@ describe('settings — doc "main" (FirestoreSettingsRepository)', () => {
     await assertFails(docRef(otherDb(), 'settings', 'main').set(reasonableWithUpdatedAt()));
   });
 });
+
+// ─────────────────────────────────────────────────────────────
+// C-PORTAL — clientPortals/{portalUid}, espace miroir séparé
+//
+// Arbre top-level distinct de users/{userId}/... : la clé est l'uid du
+// CLIENT (portalUid), jamais celui de l'artisan. Quatre identités
+// distinctes pour ces tests, aucun chevauchement avec OWNER/OTHER
+// utilisés plus haut (qui simulent des artisans dans les collections
+// users/{userId}/...).
+// ─────────────────────────────────────────────────────────────
+
+const ARTISAN = 'artisan-uid';
+const OTHER_ARTISAN = 'other-artisan-uid';
+const CLIENT = 'client-portal-uid';
+const OTHER_CLIENT = 'other-client-portal-uid';
+
+function artisanDb() {
+  return testEnv.authenticatedContext(ARTISAN).firestore();
+}
+function otherArtisanDb() {
+  return testEnv.authenticatedContext(OTHER_ARTISAN).firestore();
+}
+function clientDb() {
+  return testEnv.authenticatedContext(CLIENT).firestore();
+}
+function otherClientDb() {
+  return testEnv.authenticatedContext(OTHER_CLIENT).firestore();
+}
+
+async function seedPortal(portalUid, overrides = {}) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx
+      .firestore()
+      .collection('clientPortals')
+      .doc(portalUid)
+      .set({
+        artisanUid: ARTISAN,
+        clientId: 'client-doc-1',
+        enabled: true,
+        createdAt: new Date(),
+        ...overrides,
+      });
+  });
+}
+
+async function seedWorkEntry(portalUid, entryId, overrides = {}) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx
+      .firestore()
+      .collection(`clientPortals/${portalUid}/workEntries`)
+      .doc(entryId)
+      .set({
+        date: '2026-03-15',
+        laborAmountHT: 5000,
+        billingMode: 'hourly',
+        portalEnabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      });
+  });
+}
+
+function portalDocRef(db, portalUid) {
+  return db.collection('clientPortals').doc(portalUid);
+}
+function workEntryRef(db, portalUid, entryId) {
+  return db.collection(`clientPortals/${portalUid}/workEntries`).doc(entryId);
+}
+function commentRef(db, portalUid, entryId, commentId) {
+  return db.collection(`clientPortals/${portalUid}/workEntries/${entryId}/portalComments`).doc(commentId);
+}
+
+describe('clientPortals/{portalUid} — profil', () => {
+  test('create — artisan crée le profil de son propre client → autorisé', async () => {
+    await assertSucceeds(
+      portalDocRef(artisanDb(), CLIENT).set({
+        artisanUid: ARTISAN,
+        clientId: 'client-doc-1',
+        enabled: true,
+        createdAt: new Date(),
+      }),
+    );
+  });
+
+  test('create — artisan tente de créer en revendiquant un autre artisanUid → refusé', async () => {
+    await assertFails(
+      portalDocRef(artisanDb(), CLIENT).set({
+        artisanUid: OTHER_ARTISAN,
+        clientId: 'client-doc-1',
+        enabled: true,
+        createdAt: new Date(),
+      }),
+    );
+  });
+
+  test('create — non authentifié → refusé', async () => {
+    await assertFails(
+      portalDocRef(anonDb(), CLIENT).set({
+        artisanUid: ARTISAN,
+        clientId: 'client-doc-1',
+        enabled: true,
+        createdAt: new Date(),
+      }),
+    );
+  });
+
+  test('read — le client lit son propre profil, enabled=true → autorisé', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await assertSucceeds(portalDocRef(clientDb(), CLIENT).get());
+  });
+
+  test('read — le client lit son propre profil MÊME désactivé → autorisé (doit pouvoir afficher "accès désactivé")', async () => {
+    await seedPortal(CLIENT, { enabled: false });
+    await assertSucceeds(portalDocRef(clientDb(), CLIENT).get());
+  });
+
+  test('read — un autre client ne peut pas lire ce profil → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(portalDocRef(otherClientDb(), CLIENT).get());
+  });
+
+  test('read — l\'artisan lié lui-même ne peut pas lire le profil via un accès direct (isOwner seul, pas de allow read pour l\'artisan)', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(portalDocRef(artisanDb(), CLIENT).get());
+  });
+
+  test('update — artisan lié bascule enabled → autorisé', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await assertSucceeds(portalDocRef(artisanDb(), CLIENT).update({ enabled: false }));
+  });
+
+  test('update — artisan lié tente de changer artisanUid → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(portalDocRef(artisanDb(), CLIENT).update({ artisanUid: OTHER_ARTISAN }));
+  });
+
+  test('update — artisan lié tente de changer clientId → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(portalDocRef(artisanDb(), CLIENT).update({ clientId: 'un-autre-client' }));
+  });
+
+  test('update — un artisan NON lié ne peut ni activer/désactiver ni rien changer → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(portalDocRef(otherArtisanDb(), CLIENT).update({ enabled: false }));
+  });
+
+  test('update — le client modifie un champ à lui (displayName) sans toucher enabled → autorisé', async () => {
+    await seedPortal(CLIENT, { enabled: true, displayName: 'Ancien nom' });
+    await assertSucceeds(portalDocRef(clientDb(), CLIENT).update({ displayName: 'Nouveau nom' }));
+  });
+
+  test('update — le client tente de repasser enabled à true tout seul → refusé', async () => {
+    await seedPortal(CLIENT, { enabled: false });
+    await assertFails(portalDocRef(clientDb(), CLIENT).update({ enabled: true }));
+  });
+
+  test(
+    'update — le client tente de repasser enabled à true NOYÉ dans un update qui change aussi displayName ' +
+      '→ refusé (le contournement précis à bloquer)',
+    async () => {
+      await seedPortal(CLIENT, { enabled: false, displayName: 'Ancien nom' });
+      await assertFails(
+        portalDocRef(clientDb(), CLIENT).update({ enabled: true, displayName: 'Nouveau nom' }),
+      );
+    },
+  );
+
+  test('update — le client tente de changer artisanUid seul → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(portalDocRef(clientDb(), CLIENT).update({ artisanUid: OTHER_ARTISAN }));
+  });
+
+  test(
+    'update — le client tente de changer artisanUid NOYÉ dans un update multi-champs → refusé',
+    async () => {
+      await seedPortal(CLIENT, { displayName: 'Ancien nom' });
+      await assertFails(
+        portalDocRef(clientDb(), CLIENT).update({
+          artisanUid: OTHER_ARTISAN,
+          displayName: 'Nouveau nom',
+        }),
+      );
+    },
+  );
+});
+
+describe('clientPortals/{portalUid}/workEntries/{entryId} — miroir', () => {
+  test('create — artisan lié avec portalEnabled valide → autorisé', async () => {
+    await seedPortal(CLIENT);
+    await assertSucceeds(
+      workEntryRef(artisanDb(), CLIENT, 'entry-1').set({
+        date: '2026-03-15',
+        laborAmountHT: 5000,
+        billingMode: 'hourly',
+        portalEnabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test('create — artisan lié sans portalEnabled (mauvais type) → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(
+      workEntryRef(artisanDb(), CLIENT, 'entry-1').set({
+        date: '2026-03-15',
+        laborAmountHT: 5000,
+        billingMode: 'hourly',
+        portalEnabled: 'oui',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test('create — un artisan NON lié à ce client → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(
+      workEntryRef(otherArtisanDb(), CLIENT, 'entry-1').set({
+        date: '2026-03-15',
+        laborAmountHT: 5000,
+        billingMode: 'hourly',
+        portalEnabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test('create — le client lui-même tente d\'écrire dans son miroir (lecture seule) → refusé', async () => {
+    await seedPortal(CLIENT);
+    await assertFails(
+      workEntryRef(clientDb(), CLIENT, 'entry-1').set({
+        date: '2026-03-15',
+        laborAmountHT: 5000,
+        billingMode: 'hourly',
+        portalEnabled: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test('read — client owner, portalEnabled=true → autorisé', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await seedWorkEntry(CLIENT, 'entry-1', { portalEnabled: true });
+    await assertSucceeds(workEntryRef(clientDb(), CLIENT, 'entry-1').get());
+  });
+
+  test(
+    'read — client owner, portail désactivé ET document non encore rebasculé (portalEnabled=false dénormalisé) → refusé ' +
+      '(le mécanisme de dénormalisation du point 2, sans aucun get() dans cette règle)',
+    async () => {
+      await seedPortal(CLIENT, { enabled: false });
+      await seedWorkEntry(CLIENT, 'entry-1', { portalEnabled: false });
+      await assertFails(workEntryRef(clientDb(), CLIENT, 'entry-1').get());
+    },
+  );
+
+  test('read — un autre client ne peut pas lire ce miroir → refusé', async () => {
+    await seedPortal(CLIENT);
+    await seedWorkEntry(CLIENT, 'entry-1');
+    await assertFails(workEntryRef(otherClientDb(), CLIENT, 'entry-1').get());
+  });
+
+  test('update — artisan lié, createdAt inchangé → autorisé', async () => {
+    await seedPortal(CLIENT);
+    await seedWorkEntry(CLIENT, 'entry-1');
+    // L'artisan n'a pas de allow read sur ce miroir (écriture seule côté
+    // rules) : on relit createdAt hors rules, comme les helpers seed().
+    let existingCreatedAt;
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const snap = await ctx.firestore().collection(`clientPortals/${CLIENT}/workEntries`).doc('entry-1').get();
+      existingCreatedAt = snap.data().createdAt;
+    });
+    await assertSucceeds(
+      workEntryRef(artisanDb(), CLIENT, 'entry-1').set({
+        date: '2026-03-16',
+        laborAmountHT: 6000,
+        billingMode: 'hourly',
+        portalEnabled: true,
+        createdAt: existingCreatedAt,
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test('update — artisan lié tente de changer createdAt → refusé', async () => {
+    await seedPortal(CLIENT);
+    await seedWorkEntry(CLIENT, 'entry-1');
+    await assertFails(
+      workEntryRef(artisanDb(), CLIENT, 'entry-1').set({
+        date: '2026-03-16',
+        laborAmountHT: 6000,
+        billingMode: 'hourly',
+        portalEnabled: true,
+        createdAt: new Date('2099-01-01'),
+        updatedAt: new Date(),
+      }),
+    );
+  });
+
+  test('delete — artisan lié → autorisé', async () => {
+    await seedPortal(CLIENT);
+    await seedWorkEntry(CLIENT, 'entry-1');
+    await assertSucceeds(workEntryRef(artisanDb(), CLIENT, 'entry-1').delete());
+  });
+
+  test('delete — un artisan NON lié → refusé', async () => {
+    await seedPortal(CLIENT);
+    await seedWorkEntry(CLIENT, 'entry-1');
+    await assertFails(workEntryRef(otherArtisanDb(), CLIENT, 'entry-1').delete());
+  });
+});
+
+describe('clientPortals/{portalUid}/workEntries/{entryId}/portalComments — écriture cliente, immuables', () => {
+  test('create — client owner, portail activé → autorisé', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await assertSucceeds(
+      commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').set({
+        text: 'Question sur cette prestation',
+        portalEnabled: true,
+        createdAt: new Date(),
+      }),
+    );
+  });
+
+  test('create — client owner, portail désactivé → refusé (ni lecture ni écriture quand disabled)', async () => {
+    await seedPortal(CLIENT, { enabled: false });
+    await assertFails(
+      commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').set({
+        text: 'Question sur cette prestation',
+        portalEnabled: true,
+        createdAt: new Date(),
+      }),
+    );
+  });
+
+  test('create — un autre client tente de créer dans un espace qui n\'est pas le sien → refusé', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await assertFails(
+      commentRef(otherClientDb(), CLIENT, 'entry-1', 'comment-1').set({
+        text: 'Question sur cette prestation',
+        portalEnabled: true,
+        createdAt: new Date(),
+      }),
+    );
+  });
+
+  test('read — client owner, portalEnabled=true → autorisé', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection(`clientPortals/${CLIENT}/workEntries/entry-1/portalComments`)
+        .doc('comment-1')
+        .set({ text: 'Une question', portalEnabled: true, createdAt: new Date() });
+    });
+    await assertSucceeds(commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').get());
+  });
+
+  test('read — artisan lié peut lire les commentaires de son client → autorisé', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection(`clientPortals/${CLIENT}/workEntries/entry-1/portalComments`)
+        .doc('comment-1')
+        .set({ text: 'Une question', portalEnabled: true, createdAt: new Date() });
+    });
+    await assertSucceeds(commentRef(artisanDb(), CLIENT, 'entry-1', 'comment-1').get());
+  });
+
+  test('update — le client tente de modifier son propre commentaire → refusé (immuable)', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .firestore()
+        .collection(`clientPortals/${CLIENT}/workEntries/entry-1/portalComments`)
+        .doc('comment-1')
+        .set({ text: 'Une question', portalEnabled: true, createdAt: new Date() });
+    });
+    await assertFails(commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').update({ text: 'Modifié' }));
+  });
+
+  test(
+    'delete — ni le client NI l\'artisan lié ne peuvent supprimer un commentaire → refusé ' +
+      '(M2 : update ET delete bloqués ensemble, sinon delete+recreate contourne l\'immuabilité)',
+    async () => {
+      await seedPortal(CLIENT, { enabled: true });
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await ctx
+          .firestore()
+          .collection(`clientPortals/${CLIENT}/workEntries/entry-1/portalComments`)
+          .doc('comment-1')
+          .set({ text: 'Une question', portalEnabled: true, createdAt: new Date() });
+      });
+      await assertFails(commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').delete());
+      await assertFails(commentRef(artisanDb(), CLIENT, 'entry-1', 'comment-1').delete());
+    },
+  );
+});
