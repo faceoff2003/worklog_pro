@@ -164,6 +164,18 @@ class ClientPortalProvisioningService {
 
   /// Renvoi indépendant, pour l'écran qui gérera un email perdu — sans lui,
   /// un email égaré rendrait le portail inutilisable sans recours.
+  ///
+  /// I3 (SECURITY_AUDIT.md, Email Enumeration Protection) a une prise ici,
+  /// mais différente de sa version d'origine : I3 parle d'un attaquant
+  /// externe énumérant des comptes arbitraires via une UI publique ; ici,
+  /// c'est l'artisan qui vérifie son propre client déjà connu — pas un
+  /// risque d'énumération. Seule conséquence réelle : si le compte a été
+  /// supprimé entre-temps (console, ou une future révocation qui
+  /// supprimerait plutôt que désactiverait) ET que la protection est
+  /// activée côté console (jamais confirmée), cet appel renverrait un
+  /// succès silencieux sans qu'aucun email ne parte — l'artisan croirait
+  /// à tort avoir renvoyé l'accès. Un désagrément de fiabilité, pas un
+  /// nouveau trou de sécurité — pas de nouveau finding pour ça.
   Future<bool> resendInvite({required String email}) async {
     try {
       await _inviteEmailSender.sendInvite(email: email);
