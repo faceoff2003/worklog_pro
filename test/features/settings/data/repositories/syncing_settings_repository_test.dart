@@ -1,0 +1,411 @@
+// Caractérisation de l'arbre de réconciliation de SyncingSettingsRepository
+// (F-SETTINGS.5). LocalSettingsRepository est réel (SharedPreferences
+// mockée) ; le cloud est un FakeCloudSettingsGateway en mémoire, seul moyen
+// de simuler de façon fiable et rapide les branches hors ligne et timeout
+// (cloud_firestore ne peut pas s'exécuter sous flutter test — voir
+// integration_test/firestore_cloud_gateway_test.dart pour la preuve, contre
+// un vrai émulateur, que FirestoreCloudSettingsGateway traduit correctement
+// absent/loaded/refus en CloudSettingsSnapshot).
+//
+// Règle absolue vérifiée ici : seul un CloudSettingsSnapshot avec
+// status == absent confirme un cloud vide. Une exception ou un timeout ne
+// le confirme jamais et ne doit déclencher aucune écriture.
+
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:worklog_pro/features/settings/data/repositories/cloud_settings_gateway.dart';
+import 'package:worklog_pro/features/settings/data/repositories/local_settings_repository.dart';
+import 'package:worklog_pro/features/settings/data/repositories/syncing_settings_repository.dart';
+import 'package:worklog_pro/features/settings/domain/entities/settings.dart';
+
+class FakeCloudSettingsGateway implements CloudSettingsGateway {
+  CloudSettingsSnapshot snapshotToReturn = const CloudSettingsSnapshot(
+    settings: Settings(),
+    status: CloudSettingsStatus.absent,
+  );
+  Object? errorToThrow;
+  bool hang = false;
+
+  /// Si non-null, fetch() attend la complétion de ce Completer avant de
+  /// renvoyer snapshotToReturn — permet à un test de suspendre la
+  /// réconciliation au milieu de son vol pour simuler une sauvegarde
+  /// utilisateur concurrente (FIX 2 : reproduction de la course).
+  Completer<void>? fetchGate;
+
+  int fetchCallCount = 0;
+  int pushCallCount = 0;
+  Settings? lastPushed;
+
+  @override
+  Future<CloudSettingsSnapshot> fetch() async {
+    fetchCallCount++;
+    if (hang) return Completer<CloudSettingsSnapshot>().future;
+    if (errorToThrow != null) return Future.error(errorToThrow!);
+    if (fetchGate != null) await fetchGate!.future;
+    return snapshotToReturn;
+  }
+
+  @override
+  Future<void> push(Settings settings) async {
+    pushCallCount++;
+    lastPushed = settings;
+  }
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late FakeCloudSettingsGateway cloud;
+  late LocalSettingsRepository local;
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    cloud = FakeCloudSettingsGateway();
+    local = LocalSettingsRepository();
+  });
+
+  SyncingSettingsRepository repo({Duration timeout = const Duration(milliseconds: 50)}) =>
+      SyncingSettingsRepository(local: local, cloud: cloud, reconciliationTimeout: timeout);
+
+  group('absent + cloud vide', () {
+    test('push local vers le cloud, loadSettings() renvoie Settings() immédiatement', () async {
+      cloud.snapshotToReturn =
+          const CloudSettingsSnapshot(settings: Settings(), status: CloudSettingsStatus.absent);
+
+      final settings = await repo().loadSettings();
+      expect(settings, const Settings());
+
+      // laisser la réconciliation de fond se terminer.
+      await Future<void>.delayed(Duration.zero);
+      expect(cloud.pushCallCount, 1);
+      expect(cloud.lastPushed!.updatedAt, isNotNull); // horodaté faute d'original
+    });
+  });
+
+  group('loaded + cloud vide', () {
+    test('push local vers le cloud', () async {
+      await local.saveSettings(const Settings(dayHours: 6));
+      cloud.snapshotToReturn =
+          const CloudSettingsSnapshot(settings: Settings(), status: CloudSettingsStatus.absent);
+
+      final settings = await repo().loadSettings();
+      expect(settings.dayHours, 6);
+
+      await Future<void>.delayed(Duration.zero);
+      expect(cloud.pushCallCount, 1);
+      expect(cloud.lastPushed!.dayHours, 6);
+    });
+  });
+
+  group('loaded + cloud existant — updatedAt le plus récent gagne', () {
+    test('local plus récent → push local vers le cloud', () async {
+      final localSettings = Settings(dayHours: 6, updatedAt: DateTime(2026, 3, 15));
+      await local.saveSettings(localSettings);
+      cloud.snapshotToReturn = CloudSettingsSnapshot(
+        settings: Settings(dayHours: 9, updatedAt: DateTime(2026, 1, 1)),
+        status: CloudSettingsStatus.loaded,
+      );
+
+      await repo().loadSettings();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(cloud.pushCallCount, 1);
+      expect(cloud.lastPushed!.dayHours, 6);
+    });
+
+    test('cloud plus récent → local écrasé par le cloud', () async {
+      await local.saveSettings(Settings(dayHours: 6, updatedAt: DateTime(2026, 1, 1)));
+      cloud.snapshotToReturn = CloudSettingsSnapshot(
+        settings: Settings(dayHours: 9, updatedAt: DateTime(2026, 3, 15)),
+        status: CloudSettingsStatus.loaded,
+      );
+
+      await repo().loadSettings();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(cloud.pushCallCount, 0);
+      final reloaded = await local.loadSettings();
+      expect(reloaded.dayHours, 9);
+    });
+
+    test('updatedAt égal (les deux null) → aucune écriture', () async {
+      await local.saveSettings(const Settings(dayHours: 6));
+      cloud.snapshotToReturn = const CloudSettingsSnapshot(
+        settings: Settings(dayHours: 9),
+        status: CloudSettingsStatus.loaded,
+      );
+
+      await repo().loadSettings();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(cloud.pushCallCount, 0);
+      final reloaded = await local.loadSettings();
+      expect(reloaded.dayHours, 6); // local inchangé
+    });
+
+    test('absent (local jamais écrit) face à un cloud plein → le cloud gagne '
+        '(Settings().updatedAt == null == "le plus vieux possible")', () async {
+      cloud.snapshotToReturn = CloudSettingsSnapshot(
+        settings: Settings(dayHours: 9, updatedAt: DateTime(2026, 3, 15)),
+        status: CloudSettingsStatus.loaded,
+      );
+
+      await repo().loadSettings();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(cloud.pushCallCount, 0);
+      final reloaded = await local.loadSettings();
+      expect(reloaded.dayHours, 9);
+    });
+  });
+
+  group('corrupted', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({'app_settings': '{{{ pas du json'});
+    });
+
+    test('cloud plein → récupération : loadSettings() renvoie les réglages du cloud, jamais de push', () async {
+      cloud.snapshotToReturn = CloudSettingsSnapshot(
+        settings: Settings(dayHours: 11, updatedAt: DateTime(2026, 3, 15)),
+        status: CloudSettingsStatus.loaded,
+      );
+
+      final settings = await repo().loadSettings();
+
+      expect(settings.dayHours, 11);
+      expect(cloud.pushCallCount, 0);
+      final localAfter = await local.loadSettings();
+      expect(localAfter.dayHours, 11); // local réparé
+    });
+
+    test('cloud vide → rien du tout, loadSettings() renvoie Settings() par défaut', () async {
+      cloud.snapshotToReturn =
+          const CloudSettingsSnapshot(settings: Settings(), status: CloudSettingsStatus.absent);
+
+      final settings = await repo().loadSettings();
+
+      expect(settings, const Settings());
+      expect(cloud.pushCallCount, 0); // jamais de push depuis corrupted, même cloud vide
+      final localSnapshotAfter = await local.loadWithStatus();
+      expect(localSnapshotAfter.status, LocalSettingsStatus.corrupted); // toujours corrompu, non "réparé" par du vide
+    });
+
+    test('get() lève une exception (hors ligne) → Settings() par défaut, recoveryFailed == true, aucune écriture',
+        () async {
+      cloud.errorToThrow = Exception('réseau indisponible');
+      final r = repo();
+
+      final settings = await r.loadSettings();
+
+      expect(settings, const Settings());
+      expect(r.recoveryFailed, isTrue);
+      expect(cloud.pushCallCount, 0);
+    });
+
+    test('get() ne répond jamais (timeout) → Settings() par défaut renvoyé sans attendre indéfiniment, recoveryFailed == true',
+        () async {
+      cloud.hang = true;
+      final r = repo(timeout: const Duration(milliseconds: 30));
+
+      final stopwatch = Stopwatch()..start();
+      final settings = await r.loadSettings();
+      stopwatch.stop();
+
+      expect(settings, const Settings());
+      expect(r.recoveryFailed, isTrue);
+      expect(stopwatch.elapsedMilliseconds, lessThan(2000)); // borné par le timeout, pas par un vrai hang
+    });
+  });
+
+  group('absent/loaded — get() en échec → on ne touche à rien', () {
+    test('exception réseau : loadSettings() renvoie le local immédiatement, aucune écriture', () async {
+      await local.saveSettings(const Settings(dayHours: 6));
+      cloud.errorToThrow = Exception('réseau indisponible');
+
+      final settings = await repo().loadSettings();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(settings.dayHours, 6); // non bloquant, valeur locale immédiate
+      expect(cloud.pushCallCount, 0);
+      final localAfter = await local.loadSettings();
+      expect(localAfter.dayHours, 6); // local intact
+    });
+  });
+
+  group('_reconciliationFuture — une seule exécution par session', () {
+    test('deux appels à loadSettings() ne déclenchent qu\'un seul fetch() cloud', () async {
+      final r = repo();
+      await r.loadSettings();
+      await r.loadSettings();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(cloud.fetchCallCount, 1);
+    });
+  });
+
+  group('saveSettings — local d\'abord et toujours, cloud best-effort', () {
+    test('le cloud échoue (exception) → saveSettings() réussit quand même, local à jour ET daté', () async {
+      cloud.errorToThrow = Exception('réseau indisponible');
+
+      await repo().saveSettings(const Settings(dayHours: 7));
+
+      final localAfter = await local.loadSettings();
+      expect(localAfter.dayHours, 7);
+      // FIX 1 : le stamp est posé AVANT la tentative cloud, sur l'objet qui
+      // part au local — un échec du push cloud ne doit pas en priver le local.
+      expect(localAfter.updatedAt, isNotNull);
+    });
+
+    test(
+      'cloud disponible → reçoit un updatedAt même si l\'appelant ne l\'a pas mis, '
+      'et le local reçoit EXACTEMENT le même horodatage (un seul stamp, pas deux DateTime.now() indépendants)',
+      () async {
+        await repo().saveSettings(const Settings(dayHours: 7));
+
+        expect(cloud.pushCallCount, 1);
+        expect(cloud.lastPushed!.dayHours, 7);
+        expect(cloud.lastPushed!.updatedAt, isNotNull);
+
+        final localAfter = await local.loadSettings();
+        expect(localAfter.updatedAt, cloud.lastPushed!.updatedAt);
+      },
+    );
+  });
+
+  group('FIX 1 — saveSettings() rafraîchit TOUJOURS updatedAt (plus de gel après le premier stamp)', () {
+    test(
+      'un updatedAt déjà présent sur l\'objet fourni est écrasé, pas conservé '
+      '(c\'était le bug : _withTimestampIfMissing ne stampait que si null, donc figé dès la première '
+      'valeur réelle reçue du cloud via la réconciliation)',
+      () async {
+        final old = DateTime(2020, 1, 1);
+
+        await repo().saveSettings(Settings(dayHours: 7, updatedAt: old));
+
+        final localAfter = await local.loadSettings();
+        expect(localAfter.updatedAt, isNot(old));
+        expect(localAfter.updatedAt!.isAfter(old), isTrue);
+        expect(cloud.lastPushed!.updatedAt, localAfter.updatedAt);
+      },
+    );
+
+    test(
+      'deux sauvegardes consécutives sans réconciliation entre les deux : updatedAt avance à chaque fois, '
+      'local et cloud toujours synchronisés sur le même horodatage '
+      '(reproduit le scénario réel observé : 12:17 puis 12:20, deux vraies éditions)',
+      () async {
+        await repo().saveSettings(const Settings(dayHours: 6));
+        final afterFirst = (await local.loadSettings()).updatedAt!;
+
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        await repo().saveSettings(const Settings(dayHours: 9));
+        final afterSecond = (await local.loadSettings()).updatedAt!;
+
+        expect(afterSecond.isAfter(afterFirst), isTrue);
+        expect(cloud.lastPushed!.updatedAt, afterSecond);
+      },
+    );
+  });
+
+  group('FIX 2 — la réconciliation ne doit jamais écraser une sauvegarde utilisateur plus récente (course)', () {
+    test(
+      'sauvegarde utilisateur pendant que la réconciliation "cloud gagne" est en vol : '
+      'le résultat périmé de la réconciliation ne doit pas écraser la sauvegarde fraîche',
+      () async {
+        // Local ancien, cloud plus récent que CET état local — la
+        // réconciliation, démarrée avec ce snapshot, va décider "le cloud
+        // gagne".
+        await local.saveSettings(Settings(dayHours: 5, updatedAt: DateTime(2020, 1, 1)));
+        cloud.snapshotToReturn = CloudSettingsSnapshot(
+          settings: Settings(dayHours: 99, updatedAt: DateTime(2025, 1, 1)),
+          status: CloudSettingsStatus.loaded,
+        );
+        cloud.fetchGate = Completer<void>();
+
+        final r = repo();
+        // Démarre loadSettings() : capture le snapshot local (2020), lance
+        // _reconcile() en tâche de fond, celle-ci se bloque immédiatement
+        // sur fetch() (fetchGate pas encore complété). loadSettings()
+        // lui-même retourne sans attendre (branche loaded, pas corrupted).
+        await r.loadSettings();
+
+        // Pendant que la réconciliation est TOUJOURS en vol (bloquée sur
+        // fetch()), une vraie sauvegarde utilisateur a lieu — FIX 1 la
+        // date avec DateTime.now(), largement postérieur à 2025-01-01.
+        await r.saveSettings(const Settings(dayHours: 42));
+        expect((await local.loadSettings()).dayHours, 42);
+
+        // On libère enfin fetch() : _reconcile() reprend avec sa décision
+        // "cloud gagne" prise sur le snapshot PÉRIMÉ (2020).
+        cloud.fetchGate!.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        // La sauvegarde utilisateur ne doit jamais être écrasée par une
+        // décision de réconciliation devenue obsolète entre-temps.
+        final finalLocal = await local.loadSettings();
+        expect(finalLocal.dayHours, 42);
+      },
+    );
+
+    test(
+      'sauvegarde utilisateur (qui répare le local) pendant qu\'une récupération corrupted est en vol : '
+      'la récupération périmée ne doit pas écraser la réparation',
+      () async {
+        SharedPreferences.setMockInitialValues({'app_settings': '{{{ pas du json'});
+        cloud.snapshotToReturn = CloudSettingsSnapshot(
+          settings: Settings(dayHours: 11, updatedAt: DateTime(2025, 1, 1)),
+          status: CloudSettingsStatus.loaded,
+        );
+        cloud.fetchGate = Completer<void>();
+
+        final r = repo(timeout: const Duration(milliseconds: 20));
+        // loadSettings() sur la branche corrupted attend _reconciliationFuture
+        // avec un timeout court : il expire pendant que fetch() est bloqué,
+        // renvoie Settings() par défaut avec recoveryFailed == true. La
+        // tâche _reconcile() continue cependant de tourner en arrière-plan.
+        final settings = await r.loadSettings();
+        expect(settings, const Settings());
+        expect(r.recoveryFailed, isTrue);
+
+        // L'utilisateur, voyant des réglages par défaut, en ressaisit
+        // manuellement — une vraie sauvegarde qui répare le local (le
+        // statut local passe de corrupted à loaded).
+        await r.saveSettings(const Settings(dayHours: 42));
+        expect((await local.loadSettings()).dayHours, 42);
+
+        // On libère enfin fetch() : _reconcile() reprend sa décision de
+        // récupération, prise sur l'état PÉRIMÉ (encore corrupted).
+        cloud.fetchGate!.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        // La réparation de l'utilisateur ne doit jamais être écrasée par
+        // une récupération cloud devenue obsolète entre-temps.
+        final finalLocal = await local.loadSettings();
+        expect(finalLocal.dayHours, 42);
+      },
+    );
+  });
+
+  group('updatePdfHeader — délègue à loadSettings()/saveSettings()', () {
+    test('modifie pdfHeader, préserve le reste, propage au cloud', () async {
+      await local.saveSettings(const Settings(dayHours: 9, currency: 'USD'));
+      // Cloud "loaded" avec un updatedAt à égalité (les deux null) avec le
+      // local d'origine : la réconciliation de fond déclenchée par le
+      // loadSettings() interne à updatePdfHeader() devient un no-op (cmp ==
+      // 0), qui ne peut donc pas entrer en course avec le push explicite de
+      // saveSettings() ci-dessous et fausser lastPushed/l'état local.
+      cloud.snapshotToReturn =
+          const CloudSettingsSnapshot(settings: Settings(), status: CloudSettingsStatus.loaded);
+
+      const newHeader = PdfHeader(name: 'X', phone: '', mentionHT: 'Prix HT');
+      await repo().updatePdfHeader(newHeader);
+
+      final updated = await local.loadSettings();
+      expect(updated.pdfHeader, newHeader);
+      expect(updated.dayHours, 9);
+      expect(cloud.lastPushed?.pdfHeader, newHeader);
+    });
+  });
+}

@@ -46,6 +46,10 @@ abstract class Settings with _$Settings {
     @Default(false) bool autoBackupEnabled,
     DateTime? lastBackupAt,
     @Default(1) int schemaVersion,
+    // Nullable, pas de @Default : un JSON local existant écrit avant
+    // F-SETTINGS.4 n'a pas ce champ, il doit rester lisible (null = "aussi
+    // vieux que possible", cf. la logique de conflit last-write-wins).
+    DateTime? updatedAt,
   }) = _Settings;
 
   factory Settings.fromJson(Map<String, dynamic> json) => _$SettingsFromJson(json);

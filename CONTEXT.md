@@ -117,6 +117,12 @@ lib/
 ```
 > `lib/presentation/widgets/` et `lib/services/` (dossiers vides, reliquats)
 > ont été supprimés en R-SEC.3 (2026-09-06).
+>
+> `features/settings/` a rejoint le pattern des autres features en
+> sprint F-SETTINGS (2026-09-07) : `domain/repositories/settings_repository.dart`
+> (interface abstraite, absente jusque-là) + trois implémentations
+> concrètes dans `data/repositories/` — voir §5 et
+> `doc/F-SETTINGS_SPRINT_REPORT.md` pour le détail.
 
 **Verdict** : Structure feature-first raisonnablement propre. L'absence de
 `use_cases` est un choix délibéré ou un oubli — dans les deux cas, c'est à
@@ -252,17 +258,53 @@ Toutes les collections sont **sous-collections de l'utilisateur** : `users/{user
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
-### `users/{userId}/settings/{settingId}`
-Rule Firestore présente et validée par champ connu (fix R-SEC.2 M5,
-2026-09-06) — **mais collection non alimentée**. `Settings` (Freezed,
-préférences de l'artisan : tarifs, en-tête PDF, thème, arrondi, etc.)
-est en réalité persisté exclusivement en local via `SharedPreferences`
-(`lib/features/settings/data/repositories/settings_repository.dart`,
-clé `app_settings`). Aucun code de l'app n'écrit jamais sur ce chemin
-Firestore. Conséquence produit : les réglages de l'artisan sont
-propres à l'appareil — changement de téléphone, réinstallation ou
-perte de l'appareil = réglages reperdus (profil, en-tête PDF, tarifs
-par défaut, thème). Voir § Dette, sprint `F-SETTINGS`.
+### `users/{userId}/settings/main`
+**Collection active depuis le sprint F-SETTINGS (2026-09-07)** — ID de
+document **fixe** (`main`, pas un ID variable comme les autres
+collections : un artisan a un seul jeu de réglages). Rule Firestore
+validée par champ connu (fix R-SEC.2 M5, 2026-09-06), étendue en
+F-SETTINGS.8 pour couvrir le nouveau champ `updatedAt`
+(`optionalString(request.resource.data, 'updatedAt', 40)`, même
+pattern que `lastBackupAt`) — **déployée et vérifiée sur appareil**.
+
+| Champ | Type | Notes |
+|---|---|---|
+| dayHours, halfDayHours, defaultPauseMinutes, roundingMinutes | int | |
+| minBillingHours | double | |
+| minBillingAmountCents, travelRatePerKmCents | int | centimes |
+| currency, country | string | |
+| quickTasks, quickVendors | string[] | plafond 200 éléments (rule) |
+| pdfHeader | map | `PdfHeader` (nom, tél, email, adresse, TVA, mention HT) |
+| autoBackupEnabled | bool | |
+| lastBackupAt | timestamp? | |
+| schemaVersion | int | prévu pour `lib/core/migrations/` (toujours vide, non utilisé) |
+| updatedAt | timestamp? | **ajouté F-SETTINGS.4** — nullable, arbitre les conflits de synchronisation (le plus récent gagne) |
+
+**Architecture — trois repositories, tous `implements SettingsRepository`**
+(`lib/features/settings/domain/repositories/settings_repository.dart`,
+interface introduite en F-SETTINGS.3) :
+- `LocalSettingsRepository` — `SharedPreferences`, source de vérité
+  immédiate, jamais bloquante. Expose en interne (pas dans l'interface
+  publique) `loadWithStatus()` → `LocalSettingsStatus { absent, loaded,
+  corrupted }`, pour distinguer un compte neuf d'un JSON local corrompu.
+- `FirestoreSettingsRepository` / `FirestoreCloudSettingsGateway` —
+  accès Firestore pur, aucune logique de réconciliation.
+- `SyncingSettingsRepository` — celui réellement branché sur
+  `settingsRepositoryProvider`. Combine les deux : `loadSettings()` lit
+  le local en priorité (non bloquant, sauf branche `corrupted` qui
+  attend une réponse du cloud avec un timeout de 4s) pendant qu'une
+  réconciliation tourne en tâche de fond (une seule fois par session) ;
+  `saveSettings()` écrit local d'abord et toujours, cloud en
+  best-effort. Arbitrage de conflit par `updatedAt` le plus récent.
+  Détail complet de l'arbre de décision et des deux limites connues
+  (controllers UI non resynchronisés après un changement de fond,
+  fenêtre de course réduite mais non totalement fermée) dans
+  `doc/F-SETTINGS_SPRINT_REPORT.md`.
+
+Avant ce sprint, `Settings` était persisté exclusivement en local
+(`SharedPreferences`, clé `app_settings`) — un changement d'appareil,
+une réinstallation ou une perte de téléphone effaçait silencieusement
+tous les réglages de l'artisan. Dette notée en R-SEC (§9), **résolue**.
 
 ### `users/{userId}/client_settlements/{settlementId}`
 **Absente de ce document jusqu'ici** — ajoutée par le commit
@@ -396,46 +438,70 @@ Seules deux routes nommées. **Tout le reste navigue via `MaterialPageRoute` dir
 
 ### Résolue en sprint R-SEC (2026-09-06)
 Sprint sécurité + refactoring, 6 étapes (R-SEC.0 à R-SEC.5). Détail
-complet des findings de sécurité dans `SECURITY_AUDIT.md` (**rules
-commitées mais pas encore déployées** — voir ce document pour le
-statut précis de chaque finding).
+complet des findings de sécurité dans `SECURITY_AUDIT.md`. **Rules
+M2-M5 déployées et vérifiées sur appareil par William avant le début du
+sprint F-SETTINGS** (2026-09-07).
 
 | # | Problème | Fix |
 |---|---|---|
 | R-SEC M1 | `WorkCalculatorService.calculateDuration` pouvait renvoyer une durée négative (endTime==startTime+pause, ou pause > durée brute) → `laborAmountHT` négatif rejeté en silence par Firestore | Lève `ArgumentError` ; validation live ajoutée sur le champ Pause (`WorkEntryFormPage._validatePause`) ✅ |
-| R-SEC M2 | `client_settlements` : `allow delete` ouvert au propriétaire, contournait l'immuabilité (delete + recreate) | `allow delete: if false` — confirmé coût fonctionnel nul (`deleteSettlement()` inutilisé par l'UI) ✅ rules commitées, **pas déployées** |
-| R-SEC M3 | `clients.defaultRates` non validé (taux négatif ou mal typé possible) | Validation "absent/null ou positif" par clé (`hour/halfDay/day/fixedJob`) ✅ rules commitées, **pas déployées** |
-| R-SEC M4 | `project.type`, `expense.materialCategory`, `expense.travelMode` sans whitelist | Whitelists ajoutées (pattern absent/null/liste — critique car données réelles avec `materialCategory`/`travelMode` à `null`) ✅ rules commitées, **pas déployées** |
-| R-SEC M5 | `settings` : écriture libre, zéro validation | Validation par champ connu + plafonds de taille ✅ rules commitées, **pas déployées** — collection non alimentée de toute façon (voir §5) |
+| R-SEC M2 | `client_settlements` : `allow delete` ouvert au propriétaire, contournait l'immuabilité (delete + recreate) | `allow delete: if false` — confirmé coût fonctionnel nul (`deleteSettlement()` inutilisé par l'UI) ✅ déployé |
+| R-SEC M3 | `clients.defaultRates` non validé (taux négatif ou mal typé possible) | Validation "absent/null ou positif" par clé (`hour/halfDay/day/fixedJob`) ✅ déployé |
+| R-SEC M4 | `project.type`, `expense.materialCategory`, `expense.travelMode` sans whitelist | Whitelists ajoutées (pattern absent/null/liste — critique car données réelles avec `materialCategory`/`travelMode` à `null`) ✅ déployé |
+| R-SEC M5 | `settings` : écriture libre, zéro validation | Validation par champ connu + plafonds de taille ✅ déployé — étendue en F-SETTINGS.8 (champ `updatedAt`), voir plus bas |
 | R-SEC (structurel) | Import mort, dossiers vides, provider mort (`workEntryStreamProvider`), logique métier dans `WorkEntryFormPage._save()` et `ReportsPage` | Nettoyés / extraits (`WorkEntryBuilderService`, `ReportFilterController`) ✅ |
 | R-SEC.4 | 48 `info` `flutter analyze` (dérive depuis les 27 post W-FIX1, jamais retracée avant ce resync) | Nettoyé à 12 (voir tableau plus bas) ✅ |
+
+### Résolue en sprint F-SETTINGS (2026-09-07)
+Sprint synchronisation cloud des réglages, 8 étapes (F-SETTINGS.1 à
+F-SETTINGS.8). Détail complet dans `doc/F-SETTINGS_SPRINT_REPORT.md`.
+
+| # | Problème | Fix |
+|---|---|---|
+| F-SETTINGS (besoin initial) | `Settings` persisté exclusivement en local — changement d'appareil/réinstallation = perte silencieuse de tous les réglages | `SyncingSettingsRepository` : local d'abord, synchronisation Firestore en tâche de fond, `SharedPreferences` conservé comme cache offline ✅ |
+| F-SETTINGS M5 (rule) | Champ `updatedAt` (nouveau) non validé par les rules — un type invalide aurait arbitré un conflit de synchronisation dans le mauvais sens | `optionalString(request.resource.data, 'updatedAt', 40)` ajouté, testé sur l'émulateur avant/après (98/98) ✅ déployé |
+| F-SETTINGS (bug diagnostiqué en prod) | `updatedAt` gelé après le premier stamp reçu du cloud — l'arbitrage "le plus récent gagne" cessait de refléter la réalité après la première synchronisation | Stamp inconditionnel à chaque `saveSettings()`, un seul objet daté réutilisé pour le local et le cloud ✅ |
+| F-SETTINGS (course diagnostiquée) | La réconciliation de fond pouvait écraser une sauvegarde utilisateur plus récente, décidée sur un état local périmé | Relecture fraîche + revérification juste avant chaque écriture locale de la réconciliation — réduit la fenêtre, ne la ferme pas totalement (voir Résiduelle ci-dessous) ✅ |
 
 ### Résiduelle (connue, non bloquante)
 
 #### Code mort / incomplet
-- **`lib/core/migrations/`** : vide. `schemaVersion: 1` dans `Settings` suggère une mécanique de migration prévue mais non implémentée — servira à F-SETTINGS (voir plus bas), volontairement non touché pendant R-SEC.
+- **`lib/core/migrations/`** : toujours vide. `schemaVersion: 1` existe sur `Settings` mais aucune migration n'a été nécessaire pour l'ajout du champ `updatedAt` en F-SETTINGS.4 (nullable, sans `@Default` — un JSON local existant reste lisible tel quel). Reste en attente d'un futur changement de schéma qui en aurait réellement besoin.
 
-#### Sprint à planifier — F-SETTINGS (priorité haute)
-**Problème** : `Settings` (profil artisan, en-tête PDF, tarifs par
-défaut, thème, arrondi) est persisté uniquement en local via
-`SharedPreferences` (`lib/features/settings/data/repositories/
-settings_repository.dart`). La collection Firestore
-`users/{userId}/settings` existe et est validée côté rules (R-SEC.2
-M5) mais n'est écrite par aucun code. **Un changement d'appareil, une
-réinstallation ou une perte de téléphone efface silencieusement tous
-les réglages de l'artisan** — aucune sauvegarde cloud.
+#### Résiduel du sprint F-SETTINGS (2026-09-07) — connu, non corrigé
 
-**Action** : câbler `SettingsRepository` sur Firestore
-(`users/{uid}/settings`), avec migration automatique des
-`SharedPreferences` existantes vers le cloud au premier lancement
-post-mise à jour, et conserver `SharedPreferences` comme cache
-offline (lecture immédiate au démarrage, écriture en arrière-plan
-vers Firestore). Les rules M5 sont déjà en place, aucun travail
-Firestore-rules requis pour ce sprint.
+**Fenêtre de course réduite, pas fermée** (`SyncingSettingsRepository._reconcile()`) :
+le fix F-SETTINGS.8 relit l'état local juste avant chaque écriture pour
+éviter d'écraser une sauvegarde utilisateur plus récente, mais
+l'intervalle entre cette relecture et l'écriture qui suit n'est protégé
+par aucun verrou (`SharedPreferences` n'en fournit pas) — documenté
+explicitement en commentaire dans le code plutôt que présenté comme une
+garantie absolue. Détail dans `doc/F-SETTINGS_SPRINT_REPORT.md`.
 
-**Priorité** : haute — risque de perte de données utilisateur réelle,
-pas juste de la dette de code. **Hors périmètre R-SEC** (décision du
-2026-09-06, voir `SECURITY_AUDIT.md` M5).
+#### `SettingsPage` — controllers non resynchronisés après le premier build (F-SETTINGS, 2026-09-07)
+**Problème** : `_SettingsPageState._initControllers()`
+(`lib/features/settings/presentation/pages/settings_page.dart`) fait
+`if (_initialized) return;` en première ligne, et n'est appelée que
+depuis `build()`. Les `TextEditingController` de l'en-tête PDF ne sont
+donc peuplés qu'à la toute première valeur reçue de `settingsProvider`
+— si cette valeur change ensuite (typiquement : la réconciliation de
+fond de `SyncingSettingsRepository` ramène une valeur cloud différente
+après le premier affichage), les champs affichés restent figés sur
+l'ancienne valeur, silencieusement désynchronisés de l'état réel.
+
+**Pourquoi non bloquant pour l'instant** : avec un seul appareil, la
+réconciliation ne fait converger le local vers le cloud que dans des
+cas déjà couverts par le flux normal (premier lancement, restauration
+après corruption) — la fenêtre où l'utilisateur a l'écran Réglages
+ouvert pendant qu'une valeur *différente* arrive du cloud est étroite.
+Devient visible et gênant avec un second appareil qui aurait modifié
+les réglages entre-temps : l'appareil resté ouvert sur l'écran
+Réglages afficherait des valeurs obsolètes sans le savoir.
+
+**Non corrigé délibérément** (décision du 2026-09-07, diagnostic
+F-SETTINGS.6) — nécessiterait de resynchroniser les controllers à
+chaque changement de valeur (`ref.listen` plutôt que le
+`if (_initialized) return`), hors périmètre du diagnostic en cours.
 
 #### Tâche à part — migration `dart:html` → `package:web`
 **Problème** : `lib/features/reports/presentation/utils/file_saver_web.dart`
@@ -489,24 +555,42 @@ Ancien tableau (post W-FIX1, 27 info — historique, dépassé) :
 | `withOpacity` deprecated | 1 | → `.withValues()` à migrer |
 | `unnecessary_to_list_in_spreads` | 1 | Style mineur |
 
-#### Tests (post R-SEC, 2026-09-06)
-**291 tests, tous verts** (`flutter test`), répartis dans
-`test/core/value_objects/`, `test/features/*/domain/services/`,
-`test/features/*/presentation/pages/` et
+#### Tests (post F-SETTINGS, 2026-09-07)
+**325 tests, tous verts** (`flutter test`). Ajouts du sprint F-SETTINGS
+par rapport au dernier resync (291, post R-SEC) : caractérisation de
+`LocalSettingsRepository` (F-SETTINGS.2/.3), tests de l'arbre de
+réconciliation complet de `SyncingSettingsRepository` avec un
+`FakeCloudSettingsGateway` en mémoire — y compris hors ligne, timeout,
+et la course réconciliation/sauvegarde reproduite via un `Completer`
+contrôlé (F-SETTINGS.5/.8) —, réactivité de
+`settingsRecoveryFailedProvider` et rendu réel du bandeau dans
+`SettingsPage` (F-SETTINGS.7). Complétés par
+`integration_test/firestore_cloud_gateway_test.dart` (3 tests, émulateur
+réel, AVD Android `test_avd_medium` — la traduction absent/loaded/refus
+par `FirestoreCloudSettingsGateway`, hors du compte `flutter test`
+ci-dessus) et `firestore-tests/rules.test.mjs` (98 tests contre
+l'émulateur Firestore, rules réelles, y compris le nouveau champ
+`settings.updatedAt`).
+
+Répartis dans `test/core/value_objects/`,
+`test/features/*/domain/services/`, `test/features/*/data/repositories/`,
+`test/features/*/presentation/pages/`,
+`test/features/*/presentation/providers/` et
 `test/features/reports/presentation/providers/`. `test/widget_test.dart`
 (smoke test généré, inutilisable) supprimé en R-SEC.0.
 
-**Couverture globale (lignes, `flutter test --coverage`) : ~31 %** —
-chiffre trompeur si lu seul : la logique argent-critique est à 100 %
-(`Money`, `WorkDuration`, `WorkCalculatorService`,
-`WorkEntryBuilderService`), `DateOnly` à 98 % (1 ligne : un `catch`
-mort, voir `SECURITY_AUDIT.md`), `work_entry_form_page.dart` à ~84 %
-grâce aux tests widgets de caractérisation (4 modes de facturation ×
-avec/sans déplacement + divergence création/édition). Les
-repositories, providers Firestore et la plupart des autres pages
-restent à 0 % — **priorité suivante si le sprint continue** : au moins
-un repository (ex. `WorkEntryRepositoryImpl` contre l'émulateur
-Firestore, déjà en place pour les rules).
+**Couverture globale (lignes, `flutter test --coverage`) : ~31 % au
+dernier calcul (R-SEC, pas recalculé pendant F-SETTINGS)** — chiffre
+trompeur si lu seul : la logique argent-critique est à 100 % (`Money`,
+`WorkDuration`, `WorkCalculatorService`, `WorkEntryBuilderService`),
+`DateOnly` à 98 % (1 ligne : un `catch` mort, voir
+`SECURITY_AUDIT.md`), `work_entry_form_page.dart` à ~84 % grâce aux
+tests widgets de caractérisation (4 modes de facturation × avec/sans
+déplacement + divergence création/édition). Les trois repositories de
+`settings` sont désormais couverts (F-SETTINGS, voir plus haut) — les
+autres repositories (`ClientRepositoryImpl`, `WorkEntryRepositoryImpl`,
+etc.), les providers Firestore et la plupart des autres pages restent à
+0 % — **priorité suivante si le sprint continue**.
 
 #### Navigation
 - Navigator 1.0 basique → pas de deep linking, URLs web non partageables.
@@ -525,18 +609,15 @@ Firestore, déjà en place pour les rules).
 ### Qualité des rules
 - **Deny-all par défaut** : ✅ (le bloc `match /{document=**} { allow read, write: if false; }` en tête ne fait rien en pratique — Firestore combine les `allow` en OR — mais inoffensif ici, toutes les collections réelles ont une règle explicite)
 - **Isolation stricte par utilisateur** : ✅ toutes les opérations vérifient `isOwner(userId)`
-- **Validation des champs** : ✅ types, longueurs max, valeurs d'enum vérifiés — étendue en R-SEC.2 à `clients.defaultRates` (M3), `project.type`/`expense.materialCategory`/`expense.travelMode` (M4), `settings` (M5)
+- **Validation des champs** : ✅ types, longueurs max, valeurs d'enum vérifiés — étendue en R-SEC.2 à `clients.defaultRates` (M3), `project.type`/`expense.materialCategory`/`expense.travelMode` (M4), `settings` (M5) ; étendue en F-SETTINGS.8 au champ `settings.updatedAt`
 - **Immuabilité de `createdAt`** : ✅ `createdAtUnchanged()` vérifié sur les updates
 - **Immuabilité de `client_settlements`** : ✅ `allow update: if false` **et** `allow delete: if false` depuis R-SEC.2 (M2) — le `delete` était ouvert au propriétaire avant, contournement possible de l'immuabilité par delete+recreate
 - **`ExpenseCategory.food`** : ✅ **corrigé en W-FIX1.1** — `food` dans la whitelist
 - **Dead code `isOptionalString`** : ✅ **supprimé en W-FIX1.6**
 
-**⚠️ Important** : les fixes R-SEC.2 (M2/M3/M4/M5) sont **commités dans
-le repo mais pas déployés sur le projet Firebase `worklog-pro-2b3fb`**.
-`firebase deploy --only firestore:rules` reste à lancer par William —
-volontairement jamais exécuté pendant ce sprint (contrainte explicite,
-voir SECURITY_AUDIT.md). Tant que ce n'est pas fait, la prod tourne
-encore sur les rules d'avant R-SEC.2.
+Les fixes R-SEC.2 (M2/M3/M4/M5) et l'extension F-SETTINGS.8 (validation
+de `settings.updatedAt`) sont **déployés sur le projet Firebase
+`worklog-pro-2b3fb` et vérifiés sur appareil par William**.
 
 ### Storage rules
 ✅ présentes, deny-all par défaut, lecture/écriture limitées au propriétaire, limite 10MB, types MIME restreints images/PDF.
@@ -581,24 +662,31 @@ encore sur les rules d'avant R-SEC.2.
 | Firestore rules cohérentes | ✅ **Corrigées** (W-FIX1.1 + W-FIX1.6) |
 | `firstWhere` protégés | ✅ **Sécurisés** (W-FIX1.2) |
 | Dépendances nettoyées | ✅ **Allégé** (W-FIX1.5) |
-| Tests automatisés | ✅ **291 tests** (voir §9 Tests) — 0% → couverture ciblée en un sprint (R-SEC) |
+| Tests automatisés | ✅ **325 tests** (voir §9 Tests) — 0% → couverture ciblée sur deux sprints (R-SEC, F-SETTINGS) |
 | Deep linking / navigation web | ❌ Navigator 1.0 basique |
 | `flutter analyze` | ✅ 0 erreur · 0 warning · **12 info** (dont 11 volontaires) |
-| Rules Firestore M2-M5 (SECURITY_AUDIT.md) | ⚠️ **Corrigées dans le repo, NON déployées** — `firebase deploy` requis (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
-| Build APK release | ✅ Réussi (R-SEC.5, 2026-09-06) |
+| Rules Firestore M2-M5 + F-SETTINGS.8 (SECURITY_AUDIT.md) | ✅ **Déployées et vérifiées sur appareil** (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
+| Réglages artisan synchronisés cloud (F-SETTINGS) | ✅ `SyncingSettingsRepository`, local-first + réconciliation Firestore |
+| Build APK release | ✅ Réussi (F-SETTINGS.8, 2026-09-07) |
 
 ### Niveau de stabilité
-**Beta avancée / production-candidat** — Stable et sécurisé pour le déploiement Firebase Hosting / Play Store, **à condition de déployer les rules R-SEC.2** (sinon la prod tourne sur les anciennes rules, plus permissives sur `defaultRates`, `settings`, `type`/`materialCategory`/`travelMode`, et sur l'immuabilité de `client_settlements`).
+**Beta avancée / production-candidat** — Stable et sécurisé pour le
+déploiement Firebase Hosting / Play Store. Les rules R-SEC.2 et
+l'extension F-SETTINGS.8 sont déployées et vérifiées.
 
 Blocants restants avant prod réelle :
-- Rules R-SEC.2 non déployées → décision et action de William
 - Navigation web non déclarative → URLs non partageables
-- Couverture de tests concentrée sur le chemin argent-critique — repositories/providers Firestore et la plupart des pages restent à 0%
+- Couverture de tests concentrée sur le chemin argent-critique et,
+  depuis F-SETTINGS, les réglages — les autres repositories/providers
+  Firestore et la plupart des pages restent à 0%
+- Résiduel F-SETTINGS non bloquant : controllers `SettingsPage` non
+  resynchronisés après le premier build, fenêtre de course
+  réconciliation/sauvegarde réduite mais non totalement fermée (voir §9
+  et `doc/F-SETTINGS_SPRINT_REPORT.md`)
 
 ### Prochaines étapes suggérées
-1. **Déployer les rules Firestore** (`firebase deploy --only firestore:rules`) — décision de William, voir SECURITY_AUDIT.md.
-2. **Sprint F-SETTINGS** (priorité haute) : câbler `SettingsRepository` sur Firestore, migration `SharedPreferences` → cloud. Voir § Dette.
-3. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
-4. **Étendre la couverture de tests** aux repositories (ex. `WorkEntryRepositoryImpl` contre l'émulateur Firestore) et aux pages à 0%.
-5. **Sprint fonctionnel** : selon roadmap produit (ex: module Devis).
-6. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR.
+1. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
+2. **Étendre la couverture de tests** aux repositories restants (ex. `WorkEntryRepositoryImpl` contre l'émulateur Firestore) et aux pages à 0%.
+3. **Findings L1-L6 et I1-I5** (SECURITY_AUDIT.md) : décider s'ils méritent un futur sprint sécurité ou restent acceptés en l'état.
+4. **Sprint fonctionnel** : selon roadmap produit (ex: module Devis).
+5. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR.
