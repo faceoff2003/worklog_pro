@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/core/widgets/delete_confirm_dialog.dart';
 import 'package:worklog_pro/core/widgets/detail_info_row.dart';
+import 'package:worklog_pro/features/client_portal/presentation/pages/create_portal_dialog.dart';
+import 'package:worklog_pro/features/client_portal/presentation/providers/client_portal_provider.dart';
 import 'package:worklog_pro/features/clients/domain/entities/client.dart';
 import 'package:worklog_pro/features/clients/presentation/pages/client_form_page.dart';
 import 'package:worklog_pro/features/clients/presentation/pages/settle_account_dialog.dart';
@@ -136,6 +138,10 @@ class ClientDetailPage extends ConsumerWidget {
             iconColor: color,
             onEdit: () => _openEdit(context),
           ),
+
+          // Portail client
+          const DetailSection(title: 'Portail client'),
+          _PortalSection(key: const ValueKey('portal_section'), client: client),
 
           // Tarifs
           const DetailSection(title: 'Tarifs par défaut'),
@@ -340,6 +346,103 @@ class _AccountSection extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Section "Portail client" : état (a un portail / n'en a pas) + actions.
+///
+/// Validation de l'email AVANT ouverture du dialog de création — contrainte
+/// côté UI, jamais sur l'entité Client (email reste nullable).
+class _PortalSection extends ConsumerWidget {
+  final Client client;
+  const _PortalSection({super.key, required this.client});
+
+  bool get _hasEmail => client.email != null && client.email!.trim().isNotEmpty;
+
+  void _onCreatePressed(BuildContext context, WidgetRef ref) {
+    if (!_hasEmail) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: const Text('Ajoutez un email au client avant de créer un portail.'),
+        ),
+      );
+      return;
+    }
+    showCreatePortalDialog(context: context, ref: ref, client: client);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (client.portalUid == null) {
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => _onCreatePressed(context, ref),
+          icon: const Icon(Icons.person_add_alt_1, size: 18),
+          label: const Text('Créer un accès portail'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.indigo,
+            side: const BorderSide(color: Colors.indigo),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+      );
+    }
+
+    // Watché seulement ICI (pas plus haut) : un client sans portail n'a
+    // aucune raison de construire ClientPortalProvisioningService (donc
+    // ClientPortalRepositoryImpl() -> Firestore réel).
+    final resendState = ref.watch(portalInviteResendControllerProvider);
+
+    ref.listen<AsyncValue<bool?>>(portalInviteResendControllerProvider, (previous, next) {
+      final sent = next.valueOrNull;
+      if (sent == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: sent ? Colors.green.shade700 : Colors.red.shade700,
+          content: Text(
+            sent ? 'Email d\'accès renvoyé à ${client.email}.' : 'Échec de l\'envoi. Réessayez.',
+          ),
+        ),
+      );
+    });
+
+    final resendLoading = resendState.isLoading;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.check_circle, size: 18, color: Colors.green.shade700),
+            const SizedBox(width: 8),
+            const Text('Portail actif', style: TextStyle(fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: resendLoading || !_hasEmail
+                ? null
+                : () => ref.read(portalInviteResendControllerProvider.notifier).resend(client.email!),
+            icon: resendLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.mail_outline, size: 18),
+            label: const Text('Renvoyer l\'email d\'accès'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.indigo,
+              side: const BorderSide(color: Colors.indigo),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
