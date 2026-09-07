@@ -745,6 +745,17 @@ describe('clientPortals/{portalUid} — profil', () => {
     await assertFails(portalDocRef(artisanDb(), CLIENT).get());
   });
 
+  test(
+    'read — un artisan interroge get(clientPortals/{son_propre_uid}), AUCUN document seedé sous cet id → ' +
+      'autorisé (isOwner ne référence pas resource.data, donc pas de permission-denied sur un doc absent), ' +
+      'exists === false — c\'est ce sur quoi le routage de rôle (C-PORTAL.7) repose pour distinguer ' +
+      '"artisan" de "indéterminé"',
+    async () => {
+      const snap = await assertSucceeds(portalDocRef(artisanDb(), ARTISAN).get());
+      assert.equal(snap.exists, false);
+    },
+  );
+
   test('update — artisan lié bascule enabled → autorisé', async () => {
     await seedPortal(CLIENT, { enabled: true });
     await assertSucceeds(portalDocRef(artisanDb(), CLIENT).update({ enabled: false }));
