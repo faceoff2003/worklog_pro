@@ -78,6 +78,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(settingsProvider);
+    final recoveryFailed = ref.watch(settingsRecoveryFailedProvider);
 
     // IMPORTANT: init controllers BEFORE building Scaffold so AppBar sees _initialized = true
     settingsAsync.whenData((settings) => _initControllers(settings.pdfHeader));
@@ -108,6 +109,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (recoveryFailed) ...[
+                    _buildRecoveryFailedBanner(),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Header info card
                   _buildInfoBanner(),
                   const SizedBox(height: 20),
@@ -189,6 +195,33 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildRecoveryFailedBanner() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.wifi_off, color: Colors.red.shade400, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Réglages non récupérés, vérifiez votre connexion avant de les modifier',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

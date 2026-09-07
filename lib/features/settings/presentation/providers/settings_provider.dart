@@ -51,3 +51,38 @@ class SettingsNotifier extends AsyncNotifier<Settings> {
 final settingsProvider = AsyncNotifierProvider<SettingsNotifier, Settings>(
   SettingsNotifier.new,
 );
+
+/// true si la branche corrupted de SyncingSettingsRepository n'a pas pu
+/// confirmer l'état du cloud dans le délai imparti (hors ligne, ou trop
+/// lent) : les réglages affichés sont alors les valeurs par défaut,
+/// potentiellement fausses par rapport à ce que l'artisan avait réellement
+/// configuré.
+///
+/// Provider séparé plutôt qu'un champ sur Settings/settingsProvider : ça
+/// évite de changer le type de retour de loadSettings() (qui cascaderait
+/// dans SettingsNotifier et SettingsPage).
+///
+/// Réactivité : recoveryFailed est un simple bool mutable sur le
+/// repository, pas un flux — un Provider qui le lirait une seule fois à sa
+/// création ne se réévaluerait jamais. On force la réévaluation en
+/// watchant settingsProvider : loadSettings() (sur la branche corrupted) ne
+/// RETOURNE qu'une fois recoveryFailed définitivement fixé (succès dans le
+/// délai, ou timeout), donc la transition AsyncLoading -> AsyncData de
+/// settingsProvider — qui notifie toujours ses watchers, première
+/// résolution d'un AsyncNotifier — arrive exactement au moment où la
+/// valeur est stable. Aucun flux introduit : settingsProvider ne change
+/// que sur des actions explicites (build() une fois, updateSettings()),
+/// jamais un ticker de fond qui changerait l'état sous les doigts de
+/// l'utilisateur en train de taper.
+///
+/// Limite connue : si la réconciliation en arrière-plan continue après le
+/// timeout et finit par réussir plus tard, rien ne rafraîchit
+/// settingsProvider a posteriori — le bandeau resterait affiché même si
+/// les données ont fini par être récupérées. Gap préexistant du design
+/// (aucune re-notification après coup n'a jamais été prévue), pas propre à
+/// ce provider.
+final settingsRecoveryFailedProvider = Provider<bool>((ref) {
+  ref.watch(settingsProvider);
+  final repository = ref.watch(settingsRepositoryProvider);
+  return repository is SyncingSettingsRepository && repository.recoveryFailed;
+});
