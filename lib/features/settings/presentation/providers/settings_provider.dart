@@ -1,8 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:worklog_pro/features/settings/data/repositories/settings_repository.dart';
+import 'package:worklog_pro/features/settings/data/repositories/local_settings_repository.dart';
 import 'package:worklog_pro/features/settings/domain/entities/settings.dart';
+import 'package:worklog_pro/features/settings/domain/repositories/settings_repository.dart';
 
-final settingsRepositoryProvider = Provider<SettingsRepository>((_) => SettingsRepository());
+final settingsRepositoryProvider = Provider<SettingsRepository>((_) => LocalSettingsRepository());
 
 /// Notifier that holds Settings state and persists changes
 class SettingsNotifier extends AsyncNotifier<Settings> {

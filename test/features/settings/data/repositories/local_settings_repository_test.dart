@@ -1,20 +1,19 @@
-// Caractérisation du comportement ACTUEL de SettingsRepository (F-SETTINGS.2),
-// avant toute extraction vers Local/Firestore/SyncingSettingsRepository.
-// Aucun code de production touché dans cette étape — seulement ce fichier.
-//
-// Le point le plus important n'est pas ce qui marche, c'est ce qui NE
-// distingue PAS deux situations différentes aujourd'hui : voir le groupe
-// "JSON corrompu vs absence".
+// Caractérisation du comportement de LocalSettingsRepository.
+// F-SETTINGS.3 : extraction depuis SettingsRepository + introduction de
+// LocalSettingsStatus / loadWithStatus(). Comportement public inchangé —
+// loadSettings() résout toujours absent et corrupted vers Settings() par
+// défaut, indistinguables pour l'appelant public. loadWithStatus() (usage
+// interne, futur SyncingSettingsRepository) rend cette distinction possible.
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:worklog_pro/features/settings/data/repositories/settings_repository.dart';
+import 'package:worklog_pro/features/settings/data/repositories/local_settings_repository.dart';
 import 'package:worklog_pro/features/settings/domain/entities/settings.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  final repository = SettingsRepository();
+  final repository = LocalSettingsRepository();
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -27,31 +26,43 @@ void main() {
     });
   });
 
-  group('loadSettings — JSON corrompu vs absence (le vrai enjeu)', () {
+  group('loadWithStatus — distingue absent / loaded / corrupted', () {
+    test('rien en stock → LocalSettingsStatus.absent', () async {
+      final snapshot = await repository.loadWithStatus();
+
+      expect(snapshot.status, LocalSettingsStatus.absent);
+      expect(snapshot.settings, const Settings());
+    });
+
+    test('JSON valide → LocalSettingsStatus.loaded', () async {
+      await repository.saveSettings(const Settings(dayHours: 6));
+
+      final snapshot = await repository.loadWithStatus();
+
+      expect(snapshot.status, LocalSettingsStatus.loaded);
+      expect(snapshot.settings.dayHours, 6);
+    });
+
     test(
-      'JSON illisible renvoie Settings() par défaut — '
-      'EXACTEMENT LA MÊME VALEUR que "rien en stock", indistinguable pour l\'appelant',
+      'JSON illisible → LocalSettingsStatus.corrupted, settings reste Settings() par défaut',
       () async {
         SharedPreferences.setMockInitialValues({
           'app_settings': 'ceci n\'est pas du JSON valide {{{',
         });
 
-        final settings = await repository.loadSettings();
+        final snapshot = await repository.loadWithStatus();
 
-        expect(settings, const Settings());
-        // Caractérisation du gap identifié dans le plan F-SETTINGS : à ce
-        // stade, il n'existe AUCUN moyen pour l'appelant de savoir si ces
-        // réglages par défaut viennent d'un compte neuf (légitime, sûr à
-        // pousser vers le cloud) ou d'une corruption locale (jamais sûr à
-        // pousser — ça effacerait le cloud). F-SETTINGS.3 introduit
-        // LocalSettingsStatus.{absent, loaded, corrupted} précisément pour
-        // rendre cette distinction possible. Ce test doit être mis à jour
-        // (pas supprimé) quand loadWithStatus() existera.
+        expect(snapshot.status, LocalSettingsStatus.corrupted);
+        expect(snapshot.settings, const Settings());
+        // loadSettings() public reste inchangé : Settings() par défaut, sans
+        // exposer le statut — seul loadWithStatus() (interne) distingue
+        // maintenant ce cas de "rien en stock" (voir groupe ci-dessus).
+        expect(await repository.loadSettings(), const Settings());
       },
     );
 
     test(
-      'JSON valide mais de mauvaise forme (map inattendue) renvoie aussi Settings() par défaut',
+      'JSON valide mais de mauvaise forme (map inattendue) → aussi corrupted, pas absent',
       () async {
         SharedPreferences.setMockInitialValues({
           // JSON syntaxiquement valide, mais ce n'est pas un objet
@@ -59,9 +70,10 @@ void main() {
           'app_settings': '[1, 2, 3]',
         });
 
-        final settings = await repository.loadSettings();
+        final snapshot = await repository.loadWithStatus();
 
-        expect(settings, const Settings());
+        expect(snapshot.status, LocalSettingsStatus.corrupted);
+        expect(snapshot.settings, const Settings());
       },
     );
   });
