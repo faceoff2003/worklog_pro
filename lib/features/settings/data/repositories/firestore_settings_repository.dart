@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart' hide Settings;
+import 'package:worklog_pro/features/settings/data/repositories/cloud_settings_gateway.dart';
 import 'package:worklog_pro/features/settings/domain/entities/settings.dart';
 import 'package:worklog_pro/features/settings/domain/repositories/settings_repository.dart';
 
@@ -6,31 +7,26 @@ import 'package:worklog_pro/features/settings/domain/repositories/settings_repos
 /// fixe : users/{uid}/settings/main (pas un ID variable comme les autres
 /// collections — un artisan a un seul jeu de réglages).
 ///
+/// Fine enveloppe autour de [FirestoreCloudSettingsGateway] : la logique
+/// d'accès au document vit dans le gateway (réutilisée par
+/// SyncingSettingsRepository, F-SETTINGS.5), ici on se contente de traduire
+/// vers la surface publique SettingsRepository (absent -> Settings() par
+/// défaut, comme LocalSettingsRepository).
+///
 /// Aucune réconciliation, aucun cache local ici : voir
 /// SyncingSettingsRepository (F-SETTINGS.5+) pour la logique
 /// local-d'abord / cloud-vide-jamais-écrasé.
 class FirestoreSettingsRepository implements SettingsRepository {
-  final FirebaseFirestore _firestore;
-  final String _uid;
+  final CloudSettingsGateway _gateway;
 
   FirestoreSettingsRepository({required String uid, FirebaseFirestore? firestore})
-      : _uid = uid,
-        _firestore = firestore ?? FirebaseFirestore.instance;
-
-  DocumentReference<Map<String, dynamic>> _docRef() =>
-      _firestore.collection('users').doc(_uid).collection('settings').doc('main');
+      : _gateway = FirestoreCloudSettingsGateway(uid: uid, firestore: firestore);
 
   @override
-  Future<Settings> loadSettings() async {
-    final snapshot = await _docRef().get();
-    if (!snapshot.exists) return const Settings();
-    return Settings.fromJson(snapshot.data()!);
-  }
+  Future<Settings> loadSettings() async => (await _gateway.fetch()).settings;
 
   @override
-  Future<void> saveSettings(Settings settings) async {
-    await _docRef().set(settings.toJson());
-  }
+  Future<void> saveSettings(Settings settings) => _gateway.push(settings);
 
   @override
   Future<void> updatePdfHeader(PdfHeader header) async {
