@@ -52,6 +52,9 @@ _Settings _$SettingsFromJson(Map<String, dynamic> json) => _Settings(
           ? null
           : DateTime.parse(json['lastBackupAt'] as String),
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+      updatedAt: json['updatedAt'] == null
+          ? null
+          : DateTime.parse(json['updatedAt'] as String),
     );
 
 Map<String, dynamic> _$SettingsToJson(_Settings instance) => <String, dynamic>{
@@ -70,6 +73,7 @@ Map<String, dynamic> _$SettingsToJson(_Settings instance) => <String, dynamic>{
       'autoBackupEnabled': instance.autoBackupEnabled,
       'lastBackupAt': instance.lastBackupAt?.toIso8601String(),
       'schemaVersion': instance.schemaVersion,
+      'updatedAt': instance.updatedAt?.toIso8601String(),
     };
 
 _PdfHeader _$PdfHeaderFromJson(Map<String, dynamic> json) => _PdfHeader(

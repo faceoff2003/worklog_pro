@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
 import { test, describe, before, after, beforeEach } from 'node:test';
 import {
   initializeTestEnvironment,
@@ -523,5 +524,76 @@ describe('settings', () => {
   test('read — non authentifié → refusé', async () => {
     await seed('settings', 'doc1', reasonable());
     await assertFails(docRef(anonDb(), 'settings', 'doc1').get());
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// settings — doc fixe "main" (FirestoreSettingsRepository, F-SETTINGS.4)
+//
+// La rule elle-même ne distingue pas les IDs de document (voir le describe
+// "settings" ci-dessus, doc1). Ce groupe caractérise le contrat exact que
+// FirestoreSettingsRepository utilise en production : users/{uid}/settings/
+// main, avec le nouveau champ updatedAt (DateTime? -> ISO string, ajouté à
+// Settings pour F-SETTINGS.4).
+// ─────────────────────────────────────────────────────────────
+describe('settings — doc "main" (FirestoreSettingsRepository)', () => {
+  const reasonableWithUpdatedAt = () => ({
+    dayHours: 8,
+    halfDayHours: 4,
+    defaultPauseMinutes: 0,
+    roundingMinutes: 15,
+    minBillingHours: 2.0,
+    minBillingAmountCents: 2500,
+    currency: 'EUR',
+    country: 'BE',
+    travelRatePerKmCents: 50,
+    quickTasks: ['Tirage câble'],
+    quickVendors: ['Brico'],
+    pdfHeader: { name: 'Jean', phone: '', mentionHT: 'Prix HT' },
+    autoBackupEnabled: false,
+    schemaVersion: 1,
+    updatedAt: '2026-03-15T10:30:00.000Z',
+  });
+
+  test('lecture — doc absent → get() autorisé, exists === false', async () => {
+    await assertSucceeds(docRef(ownerDb(), 'settings', 'main').get());
+    const snap = await docRef(ownerDb(), 'settings', 'main').get();
+    assert.equal(snap.exists, false);
+  });
+
+  test('lecture — doc existant → get() autorisé, données lisibles', async () => {
+    await seed('settings', 'main', reasonableWithUpdatedAt());
+    const snap = await docRef(ownerDb(), 'settings', 'main').get();
+    assert.equal(snap.exists, true);
+    assert.equal(snap.data().dayHours, 8);
+  });
+
+  test(
+    'écriture — payload avec updatedAt (ISO string) → autorisé ' +
+      '(répond à la question F-SETTINGS.4 : le champ n\'est pas rejeté)',
+    async () => {
+      await assertSucceeds(docRef(ownerDb(), 'settings', 'main').set(reasonableWithUpdatedAt()));
+    },
+  );
+
+  test(
+    'écriture — updatedAt de mauvais type (int au lieu de string ISO) → accepté quand même : ' +
+      'champ absent de la liste des champs validés par M5, seul le plafond de 20 clés protège (gap à trancher)',
+    async () => {
+      await assertSucceeds(
+        docRef(ownerDb(), 'settings', 'main').set({ ...reasonableWithUpdatedAt(), updatedAt: 12345 }),
+      );
+    },
+  );
+
+  test('round-trip complet — écriture puis lecture renvoie exactement les mêmes valeurs, y compris updatedAt', async () => {
+    const payload = reasonableWithUpdatedAt();
+    await docRef(ownerDb(), 'settings', 'main').set(payload);
+    const snap = await docRef(ownerDb(), 'settings', 'main').get();
+    assert.deepEqual(snap.data(), payload);
+  });
+
+  test('écriture — autre utilisateur (uid différent) sur le doc "main" du owner → refusé', async () => {
+    await assertFails(docRef(otherDb(), 'settings', 'main').set(reasonableWithUpdatedAt()));
   });
 });

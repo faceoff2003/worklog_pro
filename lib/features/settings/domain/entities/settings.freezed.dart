@@ -28,7 +28,10 @@ mixin _$Settings {
   PdfHeader get pdfHeader;
   bool get autoBackupEnabled;
   DateTime? get lastBackupAt;
-  int get schemaVersion;
+  int get schemaVersion; // Nullable, pas de @Default : un JSON local existant écrit avant
+// F-SETTINGS.4 n'a pas ce champ, il doit rester lisible (null = "aussi
+// vieux que possible", cf. la logique de conflit last-write-wins).
+  DateTime? get updatedAt;
 
   /// Create a copy of Settings
   /// with the given fields replaced by the non-null parameter values.
@@ -73,7 +76,9 @@ mixin _$Settings {
             (identical(other.lastBackupAt, lastBackupAt) ||
                 other.lastBackupAt == lastBackupAt) &&
             (identical(other.schemaVersion, schemaVersion) ||
-                other.schemaVersion == schemaVersion));
+                other.schemaVersion == schemaVersion) &&
+            (identical(other.updatedAt, updatedAt) ||
+                other.updatedAt == updatedAt));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -94,11 +99,12 @@ mixin _$Settings {
       pdfHeader,
       autoBackupEnabled,
       lastBackupAt,
-      schemaVersion);
+      schemaVersion,
+      updatedAt);
 
   @override
   String toString() {
-    return 'Settings(dayHours: $dayHours, halfDayHours: $halfDayHours, defaultPauseMinutes: $defaultPauseMinutes, roundingMinutes: $roundingMinutes, minBillingHours: $minBillingHours, minBillingAmountCents: $minBillingAmountCents, currency: $currency, country: $country, travelRatePerKmCents: $travelRatePerKmCents, quickTasks: $quickTasks, quickVendors: $quickVendors, pdfHeader: $pdfHeader, autoBackupEnabled: $autoBackupEnabled, lastBackupAt: $lastBackupAt, schemaVersion: $schemaVersion)';
+    return 'Settings(dayHours: $dayHours, halfDayHours: $halfDayHours, defaultPauseMinutes: $defaultPauseMinutes, roundingMinutes: $roundingMinutes, minBillingHours: $minBillingHours, minBillingAmountCents: $minBillingAmountCents, currency: $currency, country: $country, travelRatePerKmCents: $travelRatePerKmCents, quickTasks: $quickTasks, quickVendors: $quickVendors, pdfHeader: $pdfHeader, autoBackupEnabled: $autoBackupEnabled, lastBackupAt: $lastBackupAt, schemaVersion: $schemaVersion, updatedAt: $updatedAt)';
   }
 }
 
@@ -122,7 +128,8 @@ abstract mixin class $SettingsCopyWith<$Res> {
       PdfHeader pdfHeader,
       bool autoBackupEnabled,
       DateTime? lastBackupAt,
-      int schemaVersion});
+      int schemaVersion,
+      DateTime? updatedAt});
 
   $PdfHeaderCopyWith<$Res> get pdfHeader;
 }
@@ -154,6 +161,7 @@ class _$SettingsCopyWithImpl<$Res> implements $SettingsCopyWith<$Res> {
     Object? autoBackupEnabled = null,
     Object? lastBackupAt = freezed,
     Object? schemaVersion = null,
+    Object? updatedAt = freezed,
   }) {
     return _then(_self.copyWith(
       dayHours: null == dayHours
@@ -216,6 +224,10 @@ class _$SettingsCopyWithImpl<$Res> implements $SettingsCopyWith<$Res> {
           ? _self.schemaVersion
           : schemaVersion // ignore: cast_nullable_to_non_nullable
               as int,
+      updatedAt: freezed == updatedAt
+          ? _self.updatedAt
+          : updatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ));
   }
 
@@ -338,7 +350,8 @@ extension SettingsPatterns on Settings {
             PdfHeader pdfHeader,
             bool autoBackupEnabled,
             DateTime? lastBackupAt,
-            int schemaVersion)?
+            int schemaVersion,
+            DateTime? updatedAt)?
         $default, {
     required TResult orElse(),
   }) {
@@ -360,7 +373,8 @@ extension SettingsPatterns on Settings {
             _that.pdfHeader,
             _that.autoBackupEnabled,
             _that.lastBackupAt,
-            _that.schemaVersion);
+            _that.schemaVersion,
+            _that.updatedAt);
       case _:
         return orElse();
     }
@@ -396,7 +410,8 @@ extension SettingsPatterns on Settings {
             PdfHeader pdfHeader,
             bool autoBackupEnabled,
             DateTime? lastBackupAt,
-            int schemaVersion)
+            int schemaVersion,
+            DateTime? updatedAt)
         $default,
   ) {
     final _that = this;
@@ -417,7 +432,8 @@ extension SettingsPatterns on Settings {
             _that.pdfHeader,
             _that.autoBackupEnabled,
             _that.lastBackupAt,
-            _that.schemaVersion);
+            _that.schemaVersion,
+            _that.updatedAt);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -452,7 +468,8 @@ extension SettingsPatterns on Settings {
             PdfHeader pdfHeader,
             bool autoBackupEnabled,
             DateTime? lastBackupAt,
-            int schemaVersion)?
+            int schemaVersion,
+            DateTime? updatedAt)?
         $default,
   ) {
     final _that = this;
@@ -473,7 +490,8 @@ extension SettingsPatterns on Settings {
             _that.pdfHeader,
             _that.autoBackupEnabled,
             _that.lastBackupAt,
-            _that.schemaVersion);
+            _that.schemaVersion,
+            _that.updatedAt);
       case _:
         return null;
     }
@@ -523,7 +541,8 @@ class _Settings implements Settings {
       this.pdfHeader = const PdfHeader(),
       this.autoBackupEnabled = false,
       this.lastBackupAt,
-      this.schemaVersion = 1})
+      this.schemaVersion = 1,
+      this.updatedAt})
       : _quickTasks = quickTasks,
         _quickVendors = quickVendors;
   factory _Settings.fromJson(Map<String, dynamic> json) =>
@@ -588,6 +607,11 @@ class _Settings implements Settings {
   @override
   @JsonKey()
   final int schemaVersion;
+// Nullable, pas de @Default : un JSON local existant écrit avant
+// F-SETTINGS.4 n'a pas ce champ, il doit rester lisible (null = "aussi
+// vieux que possible", cf. la logique de conflit last-write-wins).
+  @override
+  final DateTime? updatedAt;
 
   /// Create a copy of Settings
   /// with the given fields replaced by the non-null parameter values.
@@ -637,7 +661,9 @@ class _Settings implements Settings {
             (identical(other.lastBackupAt, lastBackupAt) ||
                 other.lastBackupAt == lastBackupAt) &&
             (identical(other.schemaVersion, schemaVersion) ||
-                other.schemaVersion == schemaVersion));
+                other.schemaVersion == schemaVersion) &&
+            (identical(other.updatedAt, updatedAt) ||
+                other.updatedAt == updatedAt));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -658,11 +684,12 @@ class _Settings implements Settings {
       pdfHeader,
       autoBackupEnabled,
       lastBackupAt,
-      schemaVersion);
+      schemaVersion,
+      updatedAt);
 
   @override
   String toString() {
-    return 'Settings(dayHours: $dayHours, halfDayHours: $halfDayHours, defaultPauseMinutes: $defaultPauseMinutes, roundingMinutes: $roundingMinutes, minBillingHours: $minBillingHours, minBillingAmountCents: $minBillingAmountCents, currency: $currency, country: $country, travelRatePerKmCents: $travelRatePerKmCents, quickTasks: $quickTasks, quickVendors: $quickVendors, pdfHeader: $pdfHeader, autoBackupEnabled: $autoBackupEnabled, lastBackupAt: $lastBackupAt, schemaVersion: $schemaVersion)';
+    return 'Settings(dayHours: $dayHours, halfDayHours: $halfDayHours, defaultPauseMinutes: $defaultPauseMinutes, roundingMinutes: $roundingMinutes, minBillingHours: $minBillingHours, minBillingAmountCents: $minBillingAmountCents, currency: $currency, country: $country, travelRatePerKmCents: $travelRatePerKmCents, quickTasks: $quickTasks, quickVendors: $quickVendors, pdfHeader: $pdfHeader, autoBackupEnabled: $autoBackupEnabled, lastBackupAt: $lastBackupAt, schemaVersion: $schemaVersion, updatedAt: $updatedAt)';
   }
 }
 
@@ -688,7 +715,8 @@ abstract mixin class _$SettingsCopyWith<$Res>
       PdfHeader pdfHeader,
       bool autoBackupEnabled,
       DateTime? lastBackupAt,
-      int schemaVersion});
+      int schemaVersion,
+      DateTime? updatedAt});
 
   @override
   $PdfHeaderCopyWith<$Res> get pdfHeader;
@@ -721,6 +749,7 @@ class __$SettingsCopyWithImpl<$Res> implements _$SettingsCopyWith<$Res> {
     Object? autoBackupEnabled = null,
     Object? lastBackupAt = freezed,
     Object? schemaVersion = null,
+    Object? updatedAt = freezed,
   }) {
     return _then(_Settings(
       dayHours: null == dayHours
@@ -783,6 +812,10 @@ class __$SettingsCopyWithImpl<$Res> implements _$SettingsCopyWith<$Res> {
           ? _self.schemaVersion
           : schemaVersion // ignore: cast_nullable_to_non_nullable
               as int,
+      updatedAt: freezed == updatedAt
+          ? _self.updatedAt
+          : updatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ));
   }
 
