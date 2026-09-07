@@ -6,12 +6,19 @@
 > uniquement — voir §7 pour les écarts constatés avec l'état réel du repo.
 >
 > **Clôture de sprint (R-SEC.5, 2026-09-06)** — statut final : M1 corrigé et
-> livré (code Dart, dans l'APK release). M2/M3/M4/M5 corrigés **dans le
-> repo mais AUCUNE rule n'a été déployée** sur `worklog-pro-2b3fb` pendant
-> ce sprint (contrainte explicite tout du long) — `firebase deploy
-> --only firestore:rules` reste une action de William. Tous les L1-L6 et
-> I1-I5 restent **ouverts, non traités** : le périmètre R-SEC.2 n'a jamais
-> couvert que M1-M5. Voir le statut détaillé sous chaque finding.
+> livré (code Dart, dans l'APK release). M2/M3/M4/M5 corrigés dans le
+> repo, non déployés à la clôture de ce sprint (contrainte explicite tout
+> du long) — `firebase deploy --only firestore:rules` restait une action
+> de William. Tous les L1-L6 et I1-I5 restaient **ouverts, non traités** :
+> le périmètre R-SEC.2 n'a jamais couvert que M1-M5.
+>
+> **Mise à jour (sprint F-SETTINGS, 2026-09-07)** — M2/M3/M4/M5 **déployés
+> et vérifiés sur appareil par William** avant le début du sprint
+> F-SETTINGS. M5 a reçu une extension pendant F-SETTINGS.8 (validation du
+> nouveau champ `updatedAt`), également déployée et vérifiée — voir le
+> statut détaillé de M5 plus bas. L1-L6 et I1-I5 restent ouverts, non
+> traités par F-SETTINGS (hors périmètre — sprint de synchronisation
+> cloud des réglages, pas un sprint sécurité).
 
 ---
 
@@ -95,15 +102,13 @@ volontaire (et le documenter comme tel), soit retirer `allow delete` et
 n'autoriser que `create` (les soldes deviennent alors vraiment
 immuables, sans purge possible depuis le client).
 
-**Statut final (R-SEC.2, 2026-09-06) : ✅ CORRIGÉ, ⚠️ NON DÉPLOYÉ.**
+**Statut final : ✅ CORRIGÉ ET DÉPLOYÉ.**
 Tranché par William : `allow delete: if false`. Confirmé avant le fix
 que `deleteSettlement()` existe dans `settlement_repository_impl.dart`
 mais n'est appelé par aucune page/widget — coût fonctionnel nul.
-Testé sur l'émulateur (`firestore-tests/`, 92/92 avant, après). **La
-rule est commitée (`firestore.rules`) mais n'a jamais été déployée sur
-`worklog-pro-2b3fb`** — la prod tourne encore avec `allow delete:
-if isOwner(userId)` tant que William n'a pas lancé `firebase deploy
---only firestore:rules`.
+Testé sur l'émulateur (`firestore-tests/`, 92/92 avant, après). Déployé
+sur `worklog-pro-2b3fb` et vérifié sur appareil par William avant le
+début du sprint F-SETTINGS (2026-09-07).
 
 ### M3 — `defaultRates` (clients) entièrement non validé
 **Fichier** : `firestore.rules:57-72`
@@ -122,13 +127,13 @@ sans qu'aucune rule ni aucun code Dart n'intercepte l'anomalie.
 `isPositiveInt` (quand présents) dans les rules `clients`, en miroir de
 ce qui est déjà fait pour `laborAmountHT` sur `workEntries`.
 
-**Statut final (R-SEC.2, 2026-09-06) : ✅ CORRIGÉ, ⚠️ NON DÉPLOYÉ.**
+**Statut final : ✅ CORRIGÉ ET DÉPLOYÉ.**
 Pattern "absent OU null OU positif" (jamais "obligatoire") par clé,
 vérifié contre la forme réelle des données (`_$DefaultRatesToJson`
 inclut toujours les 4 clés, `null` quand un tarif n'est pas défini —
 un pattern strict aurait cassé tout client existant sans defaultRates
-complet). Testé sur l'émulateur avant/après. **Rule commitée
-(`firestore.rules`), pas déployée** — même statut que M2.
+complet). Testé sur l'émulateur avant/après. Déployé et vérifié — même
+statut que M2.
 
 ### M4 — Enums métier sans whitelist dans les rules : `type` (projects), `materialCategory` et `travelMode` (expenses)
 **Fichier** : `firestore.rules` (`projects` §75-94, `expenses` §134-156)
@@ -147,7 +152,7 @@ personne ne soit affectée (l'isolation `isOwner` tient).
 **Fix proposé** : ajouter les trois whitelists manquantes, à l'identique
 du pattern déjà utilisé pour `billingMode`/`category`/`status`.
 
-**Statut final (R-SEC.2, 2026-09-06) : ✅ CORRIGÉ, ⚠️ NON DÉPLOYÉ.**
+**Statut final : ✅ CORRIGÉ ET DÉPLOYÉ.**
 Whitelists ajoutées avec les valeurs complètes de `enums.dart`, pattern
 "absent OU null OU dans la liste" — **rendu obligatoire par les
 données réelles** : le script `scripts/list-distinct-enum-values.mjs`
@@ -157,7 +162,7 @@ null. Une whitelist stricte (sans tolérance null) aurait bloqué toute
 modification future de ces documents. Filet ajouté d'abord (9 tests
 caractérisant l'acceptation actuelle), vérifié sur les rules non
 modifiées via `git stash` (88/92, seuls les 3 cas visés par le fix
-échouaient), puis 92/92 après. **Rule commitée, pas déployée.**
+échouaient), puis 92/92 après. Déployé et vérifié.
 
 ### M5 — `settings` : écriture libre, zéro validation de champ
 **Fichier** : `firestore.rules:185-188`
@@ -178,25 +183,41 @@ d'exposition inter-utilisateurs — mais aucun garde-fou d'intégrité.
 borne de taille sur les champs texte (en-tête PDF, etc.) si le modèle
 `Settings` est stable.
 
-**Statut final (R-SEC.2, 2026-09-06) : ✅ CORRIGÉ, ⚠️ NON DÉPLOYÉ**
-(validation de type par champ connu + plafonds, voir commit
-`f2bb600`). **Mais l'audit prod a trouvé 0 document dans
-`users/{userId}/settings`** — pas une base vide par accident :
-`SettingsRepository`
-(`lib/features/settings/data/repositories/settings_repository.dart:6-25`)
-persiste `Settings` exclusivement via `SharedPreferences` (clé
-`app_settings`, JSON local). Aucun code de l'app n'écrit jamais sur
-`users/{userId}/settings` — la rule (et son fix M5) protège une
-collection Firestore qui n'a jamais reçu un seul document en
-production.
+**Statut R-SEC.2 (2026-09-06) : ✅ CORRIGÉ, déployé avant le début de
+F-SETTINGS** (validation de type par champ connu + plafonds, voir
+commit `f2bb600`). À la clôture de R-SEC, l'audit prod avait trouvé
+0 document dans `users/{userId}/settings` — pas une base vide par
+accident : `Settings` était persisté exclusivement via
+`SharedPreferences` (clé `app_settings`, JSON local), aucun code de
+l'app n'écrivait jamais sur ce chemin Firestore. Décision de l'époque
+(William, 2026-09-06) : garder les rules M5 en l'état sans câbler
+Firestore tout de suite, dette suivie dans `CONTEXT.md` (sprint
+`F-SETTINGS` à planifier).
 
-**Décision (William, 2026-09-06)** : on garde les rules M5 en l'état
-(elles ne coûtent rien tant que la collection reste vide, et seront
-immédiatement utiles le jour où `SettingsRepository` sera câblé sur
-Firestore) mais on ne câble pas Firestore maintenant. Conséquence
-produit documentée dans `CONTEXT.md` (réglages perdus au changement
-d'appareil) et suivi de la dette dans `CONTEXT.md` § Dette (sprint
-`F-SETTINGS` à planifier, hors périmètre R-SEC).
+**Mise à jour (sprint F-SETTINGS, 2026-09-07) : collection désormais
+active.** `SyncingSettingsRepository` écrit maintenant sur
+`users/{uid}/settings/main` (ID de document fixe) — local d'abord,
+synchronisation cloud en tâche de fond, `SharedPreferences` conservé
+comme cache offline. Voir `doc/F-SETTINGS_SPRINT_REPORT.md` pour
+l'architecture complète (trois repositories : `LocalSettingsRepository`,
+`FirestoreSettingsRepository`/`FirestoreCloudSettingsGateway`,
+`SyncingSettingsRepository`).
+
+**Règle `updatedAt` ajoutée et déployée (F-SETTINGS.8).** Le nouveau
+champ `Settings.updatedAt` (introduit en F-SETTINGS.4 pour arbitrer les
+conflits de synchronisation — le plus récent gagne) n'était initialement
+couvert par aucune validation de type dans les rules M5 : un `updatedAt`
+mal typé aurait été accepté silencieusement (seul le plafond de 20 clés
+top-level protégeait, aucune contrainte propre au champ). Comme
+`updatedAt` arbitre littéralement quelle version des données écrase
+l'autre, un type invalide n'aurait pas juste cassé une lecture — il
+aurait fait trancher un conflit dans le mauvais sens et écrasé
+silencieusement les bonnes données. Fix :
+`optionalString(request.resource.data, 'updatedAt', 40)`, même pattern
+que `lastBackupAt`. Filet d'abord (suite 98 tests reconfirmée verte sur
+les rules avant modification, le test démontrant la tolérance retourné
+pour asserter le refus), puis fix, puis 98/98 après. **Déployé sur
+`worklog-pro-2b3fb` et vérifié sur appareil par William.**
 
 ---
 
@@ -436,7 +457,8 @@ trouvés en auditant le code réel plutôt que le document :
 ### Ce qui est fait
 - **M1** : corrigé et livré (code Dart, dans l'APK release).
 - **M2, M3, M4, M5** : corrigés dans le repo, testés sur l'émulateur
-  Firestore avant/après chaque fix. **Aucune rule déployée.**
+  Firestore avant/après chaque fix. Déployés (voir §7bis, mise à jour
+  F-SETTINGS.8).
 
 ### Ce qui reste ouvert
 - **L1-L6, I1-I5** : non traités, hors périmètre de ce sprint (voir
@@ -448,11 +470,27 @@ trouvés en auditant le code réel plutôt que le document :
 - **I4** : dépendances Firebase quelques versions mineures en retard —
   mise à jour de routine, pas urgente.
 
-### Actions qui reviennent à William
-1. **Déployer les rules** : `firebase deploy --only firestore:rules`
-   pour activer M2/M3/M4/M5 en prod. Sans ça, ce sprint n'a d'effet
-   que sur le repo, pas sur la sécurité réelle de l'app.
-2. Vérifier/activer l'enforcement App Check en console (I2).
-3. Vérifier le réglage "Email Enumeration Protection" en console (I3).
+### Actions qui revenaient à William (faites depuis, voir §7bis)
+1. ~~Déployer les rules~~ : fait avant le début du sprint F-SETTINGS.
+2. Vérifier/activer l'enforcement App Check en console (I2) — toujours
+   ouvert.
+3. Vérifier le réglage "Email Enumeration Protection" en console (I3) —
+   toujours ouvert.
 4. Décider si L1-L6 méritent un futur sprint sécurité, ou restent
-   acceptés en l'état.
+   acceptés en l'état — toujours ouvert.
+
+## 7bis. Mise à jour post-clôture (sprint F-SETTINGS, 2026-09-07)
+
+- **M2, M3, M4, M5 déployés sur `worklog-pro-2b3fb` et vérifiés sur
+  appareil par William**, avant le début du sprint F-SETTINGS.
+- **M5 étendu** (F-SETTINGS.8) : validation de type ajoutée pour le
+  nouveau champ `settings.updatedAt`, déployée et vérifiée — voir le
+  détail sous M5 (§1).
+- **`users/{userId}/settings` est désormais une collection active** —
+  câblée sur `SyncingSettingsRepository`, plus une collection vide
+  protégée par des rules inutilisées (constat de clôture R-SEC.5,
+  maintenant caduc). Voir `CONTEXT.md` §5 et
+  `doc/F-SETTINGS_SPRINT_REPORT.md`.
+- **L1-L6, I1-I5 toujours ouverts** — F-SETTINGS était un sprint de
+  synchronisation cloud, pas un sprint sécurité ; aucun de ces findings
+  n'était dans son périmètre.
