@@ -239,22 +239,67 @@ void main() {
   });
 
   group('saveSettings — local d\'abord et toujours, cloud best-effort', () {
-    test('le cloud échoue (exception) → saveSettings() réussit quand même, local à jour', () async {
+    test('le cloud échoue (exception) → saveSettings() réussit quand même, local à jour ET daté', () async {
       cloud.errorToThrow = Exception('réseau indisponible');
 
       await repo().saveSettings(const Settings(dayHours: 7));
 
       final localAfter = await local.loadSettings();
       expect(localAfter.dayHours, 7);
+      // FIX 1 : le stamp est posé AVANT la tentative cloud, sur l'objet qui
+      // part au local — un échec du push cloud ne doit pas en priver le local.
+      expect(localAfter.updatedAt, isNotNull);
     });
 
-    test('cloud disponible → reçoit un updatedAt même si l\'appelant ne l\'a pas mis', () async {
-      await repo().saveSettings(const Settings(dayHours: 7));
+    test(
+      'cloud disponible → reçoit un updatedAt même si l\'appelant ne l\'a pas mis, '
+      'et le local reçoit EXACTEMENT le même horodatage (un seul stamp, pas deux DateTime.now() indépendants)',
+      () async {
+        await repo().saveSettings(const Settings(dayHours: 7));
 
-      expect(cloud.pushCallCount, 1);
-      expect(cloud.lastPushed!.dayHours, 7);
-      expect(cloud.lastPushed!.updatedAt, isNotNull);
-    });
+        expect(cloud.pushCallCount, 1);
+        expect(cloud.lastPushed!.dayHours, 7);
+        expect(cloud.lastPushed!.updatedAt, isNotNull);
+
+        final localAfter = await local.loadSettings();
+        expect(localAfter.updatedAt, cloud.lastPushed!.updatedAt);
+      },
+    );
+  });
+
+  group('FIX 1 — saveSettings() rafraîchit TOUJOURS updatedAt (plus de gel après le premier stamp)', () {
+    test(
+      'un updatedAt déjà présent sur l\'objet fourni est écrasé, pas conservé '
+      '(c\'était le bug : _withTimestampIfMissing ne stampait que si null, donc figé dès la première '
+      'valeur réelle reçue du cloud via la réconciliation)',
+      () async {
+        final old = DateTime(2020, 1, 1);
+
+        await repo().saveSettings(Settings(dayHours: 7, updatedAt: old));
+
+        final localAfter = await local.loadSettings();
+        expect(localAfter.updatedAt, isNot(old));
+        expect(localAfter.updatedAt!.isAfter(old), isTrue);
+        expect(cloud.lastPushed!.updatedAt, localAfter.updatedAt);
+      },
+    );
+
+    test(
+      'deux sauvegardes consécutives sans réconciliation entre les deux : updatedAt avance à chaque fois, '
+      'local et cloud toujours synchronisés sur le même horodatage '
+      '(reproduit le scénario réel observé : 12:17 puis 12:20, deux vraies éditions)',
+      () async {
+        await repo().saveSettings(const Settings(dayHours: 6));
+        final afterFirst = (await local.loadSettings()).updatedAt!;
+
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        await repo().saveSettings(const Settings(dayHours: 9));
+        final afterSecond = (await local.loadSettings()).updatedAt!;
+
+        expect(afterSecond.isAfter(afterFirst), isTrue);
+        expect(cloud.lastPushed!.updatedAt, afterSecond);
+      },
+    );
   });
 
   group('updatePdfHeader — délègue à loadSettings()/saveSettings()', () {

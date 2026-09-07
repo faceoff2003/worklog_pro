@@ -73,9 +73,23 @@ class SyncingSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> saveSettings(Settings settings) async {
-    await _local.saveSettings(settings);
+    // Stamp inconditionnel : toute sauvegarde publique représente une
+    // modification qui a lieu MAINTENANT, quel que soit l'updatedAt que
+    // l'appelant a pu transmettre (souvent une valeur inchangée depuis le
+    // dernier chargement, via copyWith(champ: nouvelleValeur)). Avant ce
+    // fix, seul _withTimestampIfMissing() posait un stamp, et uniquement
+    // si null — donc jamais sur un objet qui avait déjà un updatedAt réel
+    // (reçu du cloud via la réconciliation), figeant l'arbitrage
+    // "le plus récent gagne" dès la première synchronisation.
+    //
+    // Un seul objet stampé, réutilisé pour le local ET le cloud : les deux
+    // doivent toujours porter le même updatedAt, jamais deux
+    // DateTime.now() indépendants qui pourraient diverger de quelques
+    // millisecondes et fausser une comparaison ultérieure.
+    final stamped = settings.copyWith(updatedAt: DateTime.now());
+    await _local.saveSettings(stamped);
     try {
-      await _cloud.push(_withTimestampIfMissing(settings));
+      await _cloud.push(stamped);
     } catch (_) {
       // best-effort : une écriture locale réussie ne doit jamais échouer à
       // cause d'un problème réseau côté cloud.
