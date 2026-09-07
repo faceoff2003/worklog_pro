@@ -26,6 +26,17 @@ import 'package:worklog_pro/features/settings/domain/repositories/settings_repos
 ///     pousse jamais par-dessus un cloud déjà peuplé sans comparer")
 ///   corrupted + cloud plein   -> cloud vers local, recoveredSettings, JAMAIS de push
 ///   corrupted + cloud vide    -> rien du tout
+///
+/// Course réconciliation / sauvegarde (FIX 2) : _reconcile() capture son
+/// diagnostic local (localSnapshot) au tout début de loadSettings(), mais
+/// peut écrire bien plus tard (après un fetch() cloud potentiellement
+/// lent). Les deux points où _reconcile() écrit en local relisent l'état
+/// local juste avant d'écrire pour éviter d'écraser une sauvegarde
+/// utilisateur plus récente survenue entre-temps — mais cette relecture ne
+/// FERME PAS la fenêtre de course, elle la réduit à l'intervalle entre
+/// cette relecture et l'écriture qui suit immédiatement (pas de verrou :
+/// SharedPreferences n'en fournit pas). Voir les commentaires marqués
+/// "FIX 2" dans _reconcile() pour le détail par branche.
 class SyncingSettingsRepository implements SettingsRepository {
   final LocalSettingsRepository _local;
   final CloudSettingsGateway _cloud;
@@ -108,8 +119,26 @@ class SyncingSettingsRepository implements SettingsRepository {
 
       if (localSnapshot.status == LocalSettingsStatus.corrupted) {
         if (cloudSnapshot.status == CloudSettingsStatus.loaded) {
-          await _local.saveSettings(cloudSnapshot.settings);
-          _recoveredSettings = cloudSnapshot.settings;
+          // FIX 2 : entre le fetch() ci-dessus et cette ligne, une vraie
+          // sauvegarde utilisateur a pu réparer le local (loadSettings()
+          // sur la branche corrupted n'attend ce Future qu'avec un timeout
+          // — passé ce délai, l'appelant peut avoir laissé l'utilisateur
+          // ressaisir ses réglages pendant que _reconcile() tourne encore
+          // en arrière-plan). Relire l'état local juste avant d'écrire
+          // évite d'écraser cette réparation avec une récupération devenue
+          // obsolète. Ça réduit la fenêtre de course sans la fermer
+          // complètement : il reste l'intervalle entre CETTE relecture et
+          // l'écriture juste en dessous, non protégé par un verrou —
+          // acceptable ici car SharedPreferences ne fournit aucune
+          // primitive de verrouillage, et cet intervalle ne contient aucun
+          // futur `await` de notre côté (donc rien d'autre dans cet
+          // isolate ne peut s'y intercaler), mais une écriture native
+          // concurrente au niveau du plugin lui-même resterait possible.
+          final freshLocal = await _local.loadWithStatus();
+          if (freshLocal.status == LocalSettingsStatus.corrupted) {
+            await _local.saveSettings(cloudSnapshot.settings);
+            _recoveredSettings = cloudSnapshot.settings;
+          }
         }
         // cloud vide : rien du tout, jamais de push depuis corrupted.
         return;
@@ -124,7 +153,20 @@ class SyncingSettingsRepository implements SettingsRepository {
       if (cmp > 0) {
         await _cloud.push(_withTimestampIfMissing(localSnapshot.settings));
       } else if (cmp < 0) {
-        await _local.saveSettings(cloudSnapshot.settings);
+        // FIX 2 : localSnapshot a été capturé au tout début de
+        // loadSettings(), potentiellement bien avant que ce fetch() cloud
+        // ne se termine. Une sauvegarde utilisateur (donc plus récente,
+        // FIX 1 la date toujours à DateTime.now()) a pu avoir lieu entre
+        // les deux. Revérifier avec une lecture fraîche juste avant
+        // d'écrire évite d'écraser cette sauvegarde avec une décision
+        // devenue obsolète. Même réserve que ci-dessus : la fenêtre est
+        // réduite (pas d'await entre la relecture et la comparaison), pas
+        // fermée (rien ne protège contre une écriture native concurrente
+        // au niveau du plugin SharedPreferences lui-même).
+        final freshLocal = await _local.loadWithStatus();
+        if (_compareRecency(freshLocal.settings, cloudSnapshot.settings) < 0) {
+          await _local.saveSettings(cloudSnapshot.settings);
+        }
       }
       // cmp == 0 : égalité (ou les deux null), on ne touche à rien.
     } catch (_) {

@@ -28,16 +28,23 @@ class FakeCloudSettingsGateway implements CloudSettingsGateway {
   Object? errorToThrow;
   bool hang = false;
 
+  /// Si non-null, fetch() attend la complétion de ce Completer avant de
+  /// renvoyer snapshotToReturn — permet à un test de suspendre la
+  /// réconciliation au milieu de son vol pour simuler une sauvegarde
+  /// utilisateur concurrente (FIX 2 : reproduction de la course).
+  Completer<void>? fetchGate;
+
   int fetchCallCount = 0;
   int pushCallCount = 0;
   Settings? lastPushed;
 
   @override
-  Future<CloudSettingsSnapshot> fetch() {
+  Future<CloudSettingsSnapshot> fetch() async {
     fetchCallCount++;
     if (hang) return Completer<CloudSettingsSnapshot>().future;
     if (errorToThrow != null) return Future.error(errorToThrow!);
-    return Future.value(snapshotToReturn);
+    if (fetchGate != null) await fetchGate!.future;
+    return snapshotToReturn;
   }
 
   @override
@@ -298,6 +305,85 @@ void main() {
 
         expect(afterSecond.isAfter(afterFirst), isTrue);
         expect(cloud.lastPushed!.updatedAt, afterSecond);
+      },
+    );
+  });
+
+  group('FIX 2 — la réconciliation ne doit jamais écraser une sauvegarde utilisateur plus récente (course)', () {
+    test(
+      'sauvegarde utilisateur pendant que la réconciliation "cloud gagne" est en vol : '
+      'le résultat périmé de la réconciliation ne doit pas écraser la sauvegarde fraîche',
+      () async {
+        // Local ancien, cloud plus récent que CET état local — la
+        // réconciliation, démarrée avec ce snapshot, va décider "le cloud
+        // gagne".
+        await local.saveSettings(Settings(dayHours: 5, updatedAt: DateTime(2020, 1, 1)));
+        cloud.snapshotToReturn = CloudSettingsSnapshot(
+          settings: Settings(dayHours: 99, updatedAt: DateTime(2025, 1, 1)),
+          status: CloudSettingsStatus.loaded,
+        );
+        cloud.fetchGate = Completer<void>();
+
+        final r = repo();
+        // Démarre loadSettings() : capture le snapshot local (2020), lance
+        // _reconcile() en tâche de fond, celle-ci se bloque immédiatement
+        // sur fetch() (fetchGate pas encore complété). loadSettings()
+        // lui-même retourne sans attendre (branche loaded, pas corrupted).
+        await r.loadSettings();
+
+        // Pendant que la réconciliation est TOUJOURS en vol (bloquée sur
+        // fetch()), une vraie sauvegarde utilisateur a lieu — FIX 1 la
+        // date avec DateTime.now(), largement postérieur à 2025-01-01.
+        await r.saveSettings(const Settings(dayHours: 42));
+        expect((await local.loadSettings()).dayHours, 42);
+
+        // On libère enfin fetch() : _reconcile() reprend avec sa décision
+        // "cloud gagne" prise sur le snapshot PÉRIMÉ (2020).
+        cloud.fetchGate!.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        // La sauvegarde utilisateur ne doit jamais être écrasée par une
+        // décision de réconciliation devenue obsolète entre-temps.
+        final finalLocal = await local.loadSettings();
+        expect(finalLocal.dayHours, 42);
+      },
+    );
+
+    test(
+      'sauvegarde utilisateur (qui répare le local) pendant qu\'une récupération corrupted est en vol : '
+      'la récupération périmée ne doit pas écraser la réparation',
+      () async {
+        SharedPreferences.setMockInitialValues({'app_settings': '{{{ pas du json'});
+        cloud.snapshotToReturn = CloudSettingsSnapshot(
+          settings: Settings(dayHours: 11, updatedAt: DateTime(2025, 1, 1)),
+          status: CloudSettingsStatus.loaded,
+        );
+        cloud.fetchGate = Completer<void>();
+
+        final r = repo(timeout: const Duration(milliseconds: 20));
+        // loadSettings() sur la branche corrupted attend _reconciliationFuture
+        // avec un timeout court : il expire pendant que fetch() est bloqué,
+        // renvoie Settings() par défaut avec recoveryFailed == true. La
+        // tâche _reconcile() continue cependant de tourner en arrière-plan.
+        final settings = await r.loadSettings();
+        expect(settings, const Settings());
+        expect(r.recoveryFailed, isTrue);
+
+        // L'utilisateur, voyant des réglages par défaut, en ressaisit
+        // manuellement — une vraie sauvegarde qui répare le local (le
+        // statut local passe de corrupted à loaded).
+        await r.saveSettings(const Settings(dayHours: 42));
+        expect((await local.loadSettings()).dayHours, 42);
+
+        // On libère enfin fetch() : _reconcile() reprend sa décision de
+        // récupération, prise sur l'état PÉRIMÉ (encore corrupted).
+        cloud.fetchGate!.complete();
+        await Future<void>.delayed(Duration.zero);
+
+        // La réparation de l'utilisateur ne doit jamais être écrasée par
+        // une récupération cloud devenue obsolète entre-temps.
+        final finalLocal = await local.loadSettings();
+        expect(finalLocal.dayHours, 42);
       },
     );
   });
