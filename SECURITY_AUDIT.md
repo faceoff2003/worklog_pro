@@ -422,6 +422,8 @@ secret — cf. §4), donc ce n'est pas une fuite, mais c'est un fichier
 > **Statut final (2026-09-06) : tous ouverts, non traités**, sauf I5
 > (déjà résolu, rien à faire). I2 et I3 attendent une réponse de
 > William (vérification console Firebase) plutôt qu'un fix de code.
+> **Mise à jour 2026-09-07 (C-PORTAL.7) : I2 confirmé** — voir la note
+> datée dans la section I2 ci-dessous.
 
 ### I1 — Storage : `contentType` fourni par le client, spoofable
 **Fichier** : `storage.rules:18-23`
@@ -447,6 +449,19 @@ tant que l'enforcement n'est pas activé dans la console Firebase**
 (Firestore/Storage → App Check → Enforce). Cette bascule ne se fait pas
 depuis le code — @William, peux-tu confirmer qu'elle est bien activée
 côté console pour ce projet (`worklog-pro-2b3fb`) ?
+
+**Confirmé le 2026-09-07 (C-PORTAL.7), par l'échec plutôt que par la
+console.** En testant la création de portail sur le build web (jamais
+testé sur web avant ce jour), `clientPortalRepository.createPortal()`
+a échoué systématiquement avec une erreur App Check
+(`appCheck/recaptcha-error` — la clé ReCAPTCHA v3 codée en dur dans
+`main.dart` ne vérifie pas pour `localhost`, faute de branche debug
+côté web, voir CONTEXT.md § Dette). L'écriture Firestore a été
+réellement rejetée, pas seulement un avertissement côté client — donc
+l'enforcement App Check est bien actif côté console pour Firestore.
+Ce n'est plus une hypothèse à vérifier : l'échec observé EST la
+preuve. Root cause du symptôme web = dette de code (pas de branche
+debug App Check pour le web), pas un problème d'enforcement.
 
 ### I3 — Réinitialisation de mot de passe : protection anti-énumération dépendante d'un réglage console
 **Fichier** : `lib/features/auth/data/repositories/auth_repository_impl.dart:132-141`,
@@ -564,8 +579,9 @@ trouvés en auditant le code réel plutôt que le document :
 ### Ce qui reste ouvert
 - **L1-L6, I1-I5** : non traités, hors périmètre de ce sprint (voir
   §2, §3).
-- **I2** : App Check — enforcement à confirmer côté console Firebase
-  (le client seul ne bloque rien).
+- **I2** : App Check — enforcement confirmé actif pour Firestore le
+  2026-09-07 (C-PORTAL.7, constaté par l'échec réel d'une écriture sur
+  web, pas par la console — voir §3).
 - **I3** : email enumeration protection — réglage Firebase Auth à
   vérifier côté console.
 - **I4** : dépendances Firebase quelques versions mineures en retard —
@@ -573,8 +589,9 @@ trouvés en auditant le code réel plutôt que le document :
 
 ### Actions qui revenaient à William (faites depuis, voir §7bis)
 1. ~~Déployer les rules~~ : fait avant le début du sprint F-SETTINGS.
-2. Vérifier/activer l'enforcement App Check en console (I2) — toujours
-   ouvert.
+2. ~~Vérifier/activer l'enforcement App Check en console (I2)~~ :
+   confirmé actif le 2026-09-07 par l'échec réel d'une écriture web
+   (C-PORTAL.7) — voir §3.
 3. Vérifier le réglage "Email Enumeration Protection" en console (I3) —
    toujours ouvert.
 4. Décider si L1-L6 méritent un futur sprint sécurité, ou restent

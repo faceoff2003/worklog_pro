@@ -503,6 +503,37 @@ F-SETTINGS.6) — nécessiterait de resynchroniser les controllers à
 chaque changement de valeur (`ref.listen` plutôt que le
 `if (_initialized) return`), hors périmètre du diagnostic en cours.
 
+#### App Check — aucune branche debug pour le web (découvert C-PORTAL.7, 2026-09-07)
+**Problème** : `lib/main.dart:34-41` (`FirebaseAppCheck.instance.activate()`)
+a une branche `kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity`
+pour Android, mais le `webProvider` utilise systématiquement
+`ReCaptchaV3Provider(...)`, même en dev — aucun équivalent du token
+debug Android côté web.
+
+**Découvert en testant C-PORTAL.7 sur web pour la première fois**
+(jamais testé sur cette plateforme avant ce jour) : `createPortal()`
+échouait systématiquement avec `FirebaseError: AppCheck: ReCAPTCHA
+error (appCheck/recaptcha-error)` sur `localhost` — la clé ReCAPTCHA
+codée en dur n'est probablement pas configurée pour ce domaine, et
+l'enforcement App Check est confirmé actif côté console pour Firestore
+(voir `SECURITY_AUDIT.md` I2, mis à jour le 2026-09-07). Bloque **toute**
+écriture Firestore depuis le web en local, pas seulement le
+provisioning de portail — préexistant à C-PORTAL, jamais vu faute
+d'avoir testé le web avant.
+
+**Contournement utilisé pour tester C-PORTAL.7** : ajout temporaire
+(non commis) dans `main.dart` d'un bloc `useFirestoreEmulator`/
+`useAuthEmulator` gardé par `--dart-define=USE_EMULATOR=true`, pour
+pointer le build web sur les émulateurs locaux sans toucher à la
+config App Check réelle.
+
+**Fix proposé, non appliqué** : ajouter une branche debug côté web,
+symétrique à Android — soit un token de debug App Check enregistré en
+console (mécanisme standard Firebase pour le dev web), soit
+conditionner `webProvider` sur `kDebugMode` comme pour Android. Touche
+à la sécurité (`main.dart`, activation App Check) — décision de
+William avant tout fix, hors périmètre C-PORTAL.
+
 #### Tâche à part — migration `dart:html` → `package:web`
 **Problème** : `lib/features/reports/presentation/utils/file_saver_web.dart`
 (et non `file_saver_util.dart`, comme indiqué par erreur plus bas dans
