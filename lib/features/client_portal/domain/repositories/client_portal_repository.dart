@@ -10,6 +10,12 @@ import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dar
 abstract class ClientPortalRepository {
   Future<ClientPortal?> getPortal(String portalUid);
 
+  /// Crée le profil initial, enabled: true. artisanUid et clientId
+  /// immuables ensuite (firestore.rules) — l'appelant ne doit jamais
+  /// réutiliser un portalUid déjà existant (chaque compte Firebase Auth
+  /// n'a qu'un seul portail, jamais recréé).
+  Future<void> createPortal({required String portalUid, required String artisanUid, required String clientId});
+
   /// Tous les portails liés à cet artisan — nécessite la règle `list`
   /// filtrée par `artisanUid` (firestore.rules) : l'appelant DOIT être
   /// l'artisan lui-même, jamais un portalUid arbitraire. Usage : le
