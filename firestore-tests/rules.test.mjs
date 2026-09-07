@@ -740,7 +740,7 @@ describe('clientPortals/{portalUid} — profil', () => {
     await assertFails(portalDocRef(otherClientDb(), CLIENT).get());
   });
 
-  test('read — l\'artisan lié lui-même ne peut pas lire le profil via un accès direct (isOwner seul, pas de allow read pour l\'artisan)', async () => {
+  test('read — l\'artisan lié lui-même ne peut pas lire le profil via un get() direct (seul list, filtré, lui est ouvert — voir plus bas)', async () => {
     await seedPortal(CLIENT);
     await assertFails(portalDocRef(artisanDb(), CLIENT).get());
   });
@@ -801,6 +801,58 @@ describe('clientPortals/{portalUid} — profil', () => {
           displayName: 'Nouveau nom',
         }),
       );
+    },
+  );
+});
+
+describe('clientPortals — list() filtré pour l\'artisan (réparation d\'un lien manquant)', () => {
+  test('artisan, requête filtrée par where("artisanUid","==",moi) → autorisé, ne renvoie que ses portails', async () => {
+    await seedPortal(CLIENT, { artisanUid: ARTISAN });
+    await seedPortal(OTHER_CLIENT, { artisanUid: OTHER_ARTISAN });
+
+    const snap = await assertSucceeds(
+      artisanDb().collection('clientPortals').where('artisanUid', '==', ARTISAN).get(),
+    );
+
+    assert.equal(snap.size, 1);
+    assert.equal(snap.docs[0].id, CLIENT);
+  });
+
+  test('artisan, requête SANS filtre sur toute la collection → refusé', async () => {
+    await seedPortal(CLIENT, { artisanUid: ARTISAN });
+
+    await assertFails(artisanDb().collection('clientPortals').get());
+  });
+
+  test('client portail, requête filtrée par where("artisanUid","==",ARTISAN réel) → refusé', async () => {
+    await seedPortal(CLIENT, { artisanUid: ARTISAN });
+
+    await assertFails(clientDb().collection('clientPortals').where('artisanUid', '==', ARTISAN).get());
+  });
+
+  test('client portail, requête SANS filtre → refusé', async () => {
+    await seedPortal(CLIENT, { artisanUid: ARTISAN });
+
+    await assertFails(clientDb().collection('clientPortals').get());
+  });
+
+  test(
+    'client portail, requête filtrée par where("artisanUid","==",SON PROPRE uid) → AUTORISÉE mais ' +
+      'structurellement toujours vide, PAS refusée — trouvaille, pas une preuve d\'étanchéité complète. ' +
+      'Firestore ne prouve la règle que contre les CONTRAINTES de la requête (artisanUid == request.auth.uid, ' +
+      'ce qui est vrai ici) sans savoir qu\'aucun document réel n\'a jamais artisanUid == un uid de client ' +
+      'portail — cette garantie vient de allow create (jamais de allow list qui la referait), pas de cette ' +
+      'règle. Zéro donnée réelle n\'est jamais exposée par cette requête (elle ne peut renvoyer qu\'un document ' +
+      'que ce client aurait lui-même créé en s\'auto-désignant artisanUid — capacité inhabituelle mais sans '+
+      'portée sur les données d\'un autre client ou d\'un artisan), donc jugé non exploitable en l\'état — à ' +
+      'rouvrir si le modèle de données change.',
+    async () => {
+      await seedPortal(CLIENT, { artisanUid: ARTISAN });
+
+      const snap = await assertSucceeds(
+        clientDb().collection('clientPortals').where('artisanUid', '==', CLIENT).get(),
+      );
+      assert.equal(snap.size, 0);
     },
   );
 });
