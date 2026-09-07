@@ -311,23 +311,32 @@ service cloud.firestore {
     // désactiver ne doit pas geler le mirroring en arrière-plan, sinon le
     // réactiver plus tard afficherait des données périmées.
     //
-    // Coût des get() dans les rules (vérifié avant d'écrire ceci) : chaque
-    // document listé est évalué séparément, sans déduplication entre
-    // documents frères — un get() dans la règle de LECTURE d'une
-    // sous-collection listée en masse (workEntries) double son coût de
-    // lecture. D'où portalEnabled dénormalisé sur chaque document du
-    // miroir plutôt qu'un get() vers le profil à chaque lecture. Le get()
-    // de isLinkedArtisan() reste acceptable : il ne s'exécute que sur des
-    // écritures unitaires côté artisan, jamais sur une liste.
+    // Coût des get() dans les rules — vérifié empiriquement contre
+    // l'émulateur (rapport de couverture, pas une supposition) avant
+    // d'écrire ceci, PUIS corrigé après une première version fausse :
+    // une règle `list` qui référence resource.data ne peut PAS filtrer
+    // document par document — Firestore exige de prouver que TOUS les
+    // documents potentiels du résultat satisfont la règle, ou refuse la
+    // requête entière (confirmé : une règle `resource.data.x == true` sur
+    // un .get() non contraint par un .where() échoue intégralement,
+    // "Property x is undefined"). Une règle `list` qui n'utilise QUE
+    // get() (aucune référence à resource.data), en revanche, est évaluée
+    // UNE SEULE FOIS pour toute la requête, quel que soit le nombre de
+    // documents retournés (count: 1 sur 10 documents, count ≤ 2 sur 25
+    // avec la forme composée isOwner-style + get(), jamais un ×N).
+    // D'où : isPortalEnabled() ci-dessous, un get() vers le profil, utilisé
+    // aussi bien en lecture de liste qu'en écriture unitaire — pas de
+    // champ dénormalisé nulle part. Conséquence directe : désactiver un
+    // client redevient une écriture sur un seul document (enabled sur le
+    // profil), atomique par la garantie native de Firestore sur un
+    // document — aucune fenêtre de propagation partielle, puisqu'il n'y a
+    // plus rien à propager.
 
     function isLinkedArtisan(portalUid) {
       return isAuthenticated()
         && get(/databases/$(database)/documents/clientPortals/$(portalUid)).data.artisanUid == request.auth.uid;
     }
 
-    // Usage : uniquement pour valider une CRÉATION initiée par le client
-    // (portalComments) — un document unique, jamais une liste, donc le
-    // coût du get() reste négligeable ici (voir note ci-dessus).
     function isPortalEnabled(portalUid) {
       return get(/databases/$(database)/documents/clientPortals/$(portalUid)).data.enabled == true;
     }
@@ -362,24 +371,23 @@ service cloud.firestore {
     }
 
     match /clientPortals/{portalUid}/workEntries/{entryId} {
-      // Aucun get() : portalEnabled est dénormalisé sur le document lui-même.
-      allow read: if isOwner(portalUid) && resource.data.portalEnabled == true;
+      // get() unique par requête (voir note en tête de section) : pas de
+      // champ dénormalisé, enabled reste sur le seul profil.
+      allow read: if isOwner(portalUid) && isPortalEnabled(portalUid);
 
       // Écriture exclusivement par l'artisan lié — miroir en lecture seule
-      // pour le client. Pas de condition sur portalEnabled ici : le
-      // mirroring continue même désactivé (voir note en tête de section).
+      // pour le client. Pas de condition sur enabled ici : le mirroring
+      // continue même désactivé (voir note en tête de section).
       allow create: if isLinkedArtisan(portalUid)
         && isValidString(request.resource.data.date, 10)
         && isPositiveInt(request.resource.data.laborAmountHT)
         && request.resource.data.billingMode in ['hourly', 'half_day', 'day', 'fixed_job']
-        && request.resource.data.portalEnabled is bool
         && hasTimestamps(request.resource.data);
 
       allow update: if isLinkedArtisan(portalUid)
         && isValidString(request.resource.data.date, 10)
         && isPositiveInt(request.resource.data.laborAmountHT)
         && request.resource.data.billingMode in ['hourly', 'half_day', 'day', 'fixed_job']
-        && request.resource.data.portalEnabled is bool
         && hasTimestamps(request.resource.data)
         && createdAtUnchanged();
 
@@ -390,14 +398,11 @@ service cloud.firestore {
       // Nom "portalComments" (pas "comments") : évite qu'une future règle
       // collection-group générique sur un nom trop commun ne s'applique
       // par accident à cette sous-collection, ou l'inverse.
-      allow read: if (isOwner(portalUid) && resource.data.portalEnabled == true) || isLinkedArtisan(portalUid);
+      allow read: if (isOwner(portalUid) && isPortalEnabled(portalUid)) || isLinkedArtisan(portalUid);
 
-      // Un seul document créé à la fois : le get() de isPortalEnabled()
-      // reste négligeable ici (voir note en tête de section).
       allow create: if isOwner(portalUid)
         && isPortalEnabled(portalUid)
         && isValidString(request.resource.data.text, 2000)
-        && request.resource.data.portalEnabled == true
         && ('createdAt' in request.resource.data);
 
       // Immuables une fois postés — M2 (SECURITY_AUDIT.md) : update ET

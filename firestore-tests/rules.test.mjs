@@ -653,7 +653,6 @@ async function seedWorkEntry(portalUid, entryId, overrides = {}) {
         date: '2026-03-15',
         laborAmountHT: 5000,
         billingMode: 'hourly',
-        portalEnabled: true,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,
@@ -786,28 +785,13 @@ describe('clientPortals/{portalUid} — profil', () => {
 });
 
 describe('clientPortals/{portalUid}/workEntries/{entryId} — miroir', () => {
-  test('create — artisan lié avec portalEnabled valide → autorisé', async () => {
+  test('create — artisan lié → autorisé', async () => {
     await seedPortal(CLIENT);
     await assertSucceeds(
       workEntryRef(artisanDb(), CLIENT, 'entry-1').set({
         date: '2026-03-15',
         laborAmountHT: 5000,
         billingMode: 'hourly',
-        portalEnabled: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }),
-    );
-  });
-
-  test('create — artisan lié sans portalEnabled (mauvais type) → refusé', async () => {
-    await seedPortal(CLIENT);
-    await assertFails(
-      workEntryRef(artisanDb(), CLIENT, 'entry-1').set({
-        date: '2026-03-15',
-        laborAmountHT: 5000,
-        billingMode: 'hourly',
-        portalEnabled: 'oui',
         createdAt: new Date(),
         updatedAt: new Date(),
       }),
@@ -821,7 +805,6 @@ describe('clientPortals/{portalUid}/workEntries/{entryId} — miroir', () => {
         date: '2026-03-15',
         laborAmountHT: 5000,
         billingMode: 'hourly',
-        portalEnabled: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       }),
@@ -835,25 +818,43 @@ describe('clientPortals/{portalUid}/workEntries/{entryId} — miroir', () => {
         date: '2026-03-15',
         laborAmountHT: 5000,
         billingMode: 'hourly',
-        portalEnabled: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       }),
     );
   });
 
-  test('read — client owner, portalEnabled=true → autorisé', async () => {
+  test('read — client owner, portail activé → autorisé', async () => {
     await seedPortal(CLIENT, { enabled: true });
-    await seedWorkEntry(CLIENT, 'entry-1', { portalEnabled: true });
+    await seedWorkEntry(CLIENT, 'entry-1');
     await assertSucceeds(workEntryRef(clientDb(), CLIENT, 'entry-1').get());
   });
 
+  test('read — client owner, portail désactivé → refusé', async () => {
+    await seedPortal(CLIENT, { enabled: false });
+    await seedWorkEntry(CLIENT, 'entry-1');
+    await assertFails(workEntryRef(clientDb(), CLIENT, 'entry-1').get());
+  });
+
+  test('list — client owner, 5 prestations, portail activé, .get() non contraint sur toute la collection → autorisé, les 5 renvoyées', async () => {
+    await seedPortal(CLIENT, { enabled: true });
+    for (let i = 0; i < 5; i++) {
+      await seedWorkEntry(CLIENT, `entry-${i}`);
+    }
+    const snap = await assertSucceeds(clientDb().collection(`clientPortals/${CLIENT}/workEntries`).get());
+    assert.equal(snap.size, 5);
+  });
+
   test(
-    'read — client owner, portail désactivé ET document non encore rebasculé (portalEnabled=false dénormalisé) → refusé ' +
-      '(le mécanisme de dénormalisation du point 2, sans aucun get() dans cette règle)',
+    'aucune fenêtre de propagation : désactiver le portail retire IMMÉDIATEMENT l\'accès à un document déjà existant, ' +
+      'sans réécrire ce document — une seule écriture sur le profil suffit (plus de champ dénormalisé à propager)',
     async () => {
-      await seedPortal(CLIENT, { enabled: false });
-      await seedWorkEntry(CLIENT, 'entry-1', { portalEnabled: false });
+      await seedPortal(CLIENT, { enabled: true });
+      await seedWorkEntry(CLIENT, 'entry-1');
+      await assertSucceeds(workEntryRef(clientDb(), CLIENT, 'entry-1').get());
+
+      await portalDocRef(artisanDb(), CLIENT).update({ enabled: false });
+
       await assertFails(workEntryRef(clientDb(), CLIENT, 'entry-1').get());
     },
   );
@@ -879,7 +880,6 @@ describe('clientPortals/{portalUid}/workEntries/{entryId} — miroir', () => {
         date: '2026-03-16',
         laborAmountHT: 6000,
         billingMode: 'hourly',
-        portalEnabled: true,
         createdAt: existingCreatedAt,
         updatedAt: new Date(),
       }),
@@ -894,7 +894,6 @@ describe('clientPortals/{portalUid}/workEntries/{entryId} — miroir', () => {
         date: '2026-03-16',
         laborAmountHT: 6000,
         billingMode: 'hourly',
-        portalEnabled: true,
         createdAt: new Date('2099-01-01'),
         updatedAt: new Date(),
       }),
@@ -920,7 +919,6 @@ describe('clientPortals/{portalUid}/workEntries/{entryId}/portalComments — éc
     await assertSucceeds(
       commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').set({
         text: 'Question sur cette prestation',
-        portalEnabled: true,
         createdAt: new Date(),
       }),
     );
@@ -931,7 +929,6 @@ describe('clientPortals/{portalUid}/workEntries/{entryId}/portalComments — éc
     await assertFails(
       commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').set({
         text: 'Question sur cette prestation',
-        portalEnabled: true,
         createdAt: new Date(),
       }),
     );
@@ -942,20 +939,19 @@ describe('clientPortals/{portalUid}/workEntries/{entryId}/portalComments — éc
     await assertFails(
       commentRef(otherClientDb(), CLIENT, 'entry-1', 'comment-1').set({
         text: 'Question sur cette prestation',
-        portalEnabled: true,
         createdAt: new Date(),
       }),
     );
   });
 
-  test('read — client owner, portalEnabled=true → autorisé', async () => {
+  test('read — client owner, portail activé → autorisé', async () => {
     await seedPortal(CLIENT, { enabled: true });
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx
         .firestore()
         .collection(`clientPortals/${CLIENT}/workEntries/entry-1/portalComments`)
         .doc('comment-1')
-        .set({ text: 'Une question', portalEnabled: true, createdAt: new Date() });
+        .set({ text: 'Une question', createdAt: new Date() });
     });
     await assertSucceeds(commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').get());
   });
@@ -967,7 +963,7 @@ describe('clientPortals/{portalUid}/workEntries/{entryId}/portalComments — éc
         .firestore()
         .collection(`clientPortals/${CLIENT}/workEntries/entry-1/portalComments`)
         .doc('comment-1')
-        .set({ text: 'Une question', portalEnabled: true, createdAt: new Date() });
+        .set({ text: 'Une question', createdAt: new Date() });
     });
     await assertSucceeds(commentRef(artisanDb(), CLIENT, 'entry-1', 'comment-1').get());
   });
@@ -979,7 +975,7 @@ describe('clientPortals/{portalUid}/workEntries/{entryId}/portalComments — éc
         .firestore()
         .collection(`clientPortals/${CLIENT}/workEntries/entry-1/portalComments`)
         .doc('comment-1')
-        .set({ text: 'Une question', portalEnabled: true, createdAt: new Date() });
+        .set({ text: 'Une question', createdAt: new Date() });
     });
     await assertFails(commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').update({ text: 'Modifié' }));
   });
@@ -994,7 +990,7 @@ describe('clientPortals/{portalUid}/workEntries/{entryId}/portalComments — éc
           .firestore()
           .collection(`clientPortals/${CLIENT}/workEntries/entry-1/portalComments`)
           .doc('comment-1')
-          .set({ text: 'Une question', portalEnabled: true, createdAt: new Date() });
+          .set({ text: 'Une question', createdAt: new Date() });
       });
       await assertFails(commentRef(clientDb(), CLIENT, 'entry-1', 'comment-1').delete());
       await assertFails(commentRef(artisanDb(), CLIENT, 'entry-1', 'comment-1').delete());
