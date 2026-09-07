@@ -437,6 +437,31 @@ Firestore-rules requis pour ce sprint.
 pas juste de la dette de code. **Hors périmètre R-SEC** (décision du
 2026-09-06, voir `SECURITY_AUDIT.md` M5).
 
+#### `SettingsPage` — controllers non resynchronisés après le premier build (F-SETTINGS, 2026-09-07)
+**Problème** : `_SettingsPageState._initControllers()`
+(`lib/features/settings/presentation/pages/settings_page.dart`) fait
+`if (_initialized) return;` en première ligne, et n'est appelée que
+depuis `build()`. Les `TextEditingController` de l'en-tête PDF ne sont
+donc peuplés qu'à la toute première valeur reçue de `settingsProvider`
+— si cette valeur change ensuite (typiquement : la réconciliation de
+fond de `SyncingSettingsRepository` ramène une valeur cloud différente
+après le premier affichage), les champs affichés restent figés sur
+l'ancienne valeur, silencieusement désynchronisés de l'état réel.
+
+**Pourquoi non bloquant pour l'instant** : avec un seul appareil, la
+réconciliation ne fait converger le local vers le cloud que dans des
+cas déjà couverts par le flux normal (premier lancement, restauration
+après corruption) — la fenêtre où l'utilisateur a l'écran Réglages
+ouvert pendant qu'une valeur *différente* arrive du cloud est étroite.
+Devient visible et gênant avec un second appareil qui aurait modifié
+les réglages entre-temps : l'appareil resté ouvert sur l'écran
+Réglages afficherait des valeurs obsolètes sans le savoir.
+
+**Non corrigé délibérément** (décision du 2026-09-07, diagnostic
+F-SETTINGS.6) — nécessiterait de resynchroniser les controllers à
+chaque changement de valeur (`ref.listen` plutôt que le
+`if (_initialized) return`), hors périmètre du diagnostic en cours.
+
 #### Tâche à part — migration `dart:html` → `package:web`
 **Problème** : `lib/features/reports/presentation/utils/file_saver_web.dart`
 (et non `file_saver_util.dart`, comme indiqué par erreur plus bas dans
