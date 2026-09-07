@@ -35,6 +35,12 @@ class ClientPortalRepositoryImpl implements ClientPortalRepository {
   }
 
   @override
+  Future<List<ClientPortal>> listPortalsForArtisan(String artisanUid) async {
+    final snapshot = await _firestore.collection('clientPortals').where('artisanUid', isEqualTo: artisanUid).get();
+    return snapshot.docs.map((doc) => ClientPortal.fromJson({...doc.data(), 'portalUid': doc.id})).toList();
+  }
+
+  @override
   Future<void> mirrorWorkEntry(String portalUid, WorkEntry entry) async {
     await _workEntriesMirror(portalUid).doc(entry.id).set(_curatedWorkEntryMirror(entry));
   }

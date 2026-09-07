@@ -95,6 +95,8 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   Future<ClientPortal?> getPortal(String portalUid) => throw UnimplementedError();
   @override
   Future<void> setEnabled(String portalUid, bool enabled) => throw UnimplementedError();
+  @override
+  Future<List<ClientPortal>> listPortalsForArtisan(String artisanUid) => throw UnimplementedError();
 }
 
 Client _client({required String id, String? portalUid}) => Client(

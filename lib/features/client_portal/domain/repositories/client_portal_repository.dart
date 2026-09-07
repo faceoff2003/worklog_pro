@@ -10,6 +10,12 @@ import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dar
 abstract class ClientPortalRepository {
   Future<ClientPortal?> getPortal(String portalUid);
 
+  /// Tous les portails liés à cet artisan — nécessite la règle `list`
+  /// filtrée par `artisanUid` (firestore.rules) : l'appelant DOIT être
+  /// l'artisan lui-même, jamais un portalUid arbitraire. Usage : le
+  /// balayage de réparation (ClientPortalReconciliationService).
+  Future<List<ClientPortal>> listPortalsForArtisan(String artisanUid);
+
   /// Bascule enabled — une seule écriture sur le profil, atomique. Pas de
   /// propagation : voir la note dans firestore.rules sur isPortalEnabled().
   Future<void> setEnabled(String portalUid, bool enabled);
