@@ -55,12 +55,17 @@ class _FakeClientRepository implements ClientRepository {
 class _FakeClientPortalRepository implements ClientPortalRepository {
   List<ClientPortal> portals;
   int listCallCount = 0;
+  int failNextCalls = 0;
 
   _FakeClientPortalRepository(this.portals);
 
   @override
   Future<List<ClientPortal>> listPortalsForArtisan(String artisanUid) async {
     listCallCount++;
+    if (failNextCalls > 0) {
+      failNextCalls--;
+      throw Exception('réseau indisponible');
+    }
     return portals.where((p) => p.artisanUid == artisanUid).toList();
   }
 
@@ -230,6 +235,41 @@ void main() {
       // balayage — donc toujours repairedCount == 1 de la 1re exécution,
       // pas ré-exécuté (ce qui aurait donné 0 la 2e fois, déjà lié).
       expect(secondReport.repairedCount, 1);
+    });
+  });
+
+  group('un échec n\'est jamais mis en cache — retente au prochain appel', () {
+    test('1er appel échoue (pas de réseau) → 2e appel retente réellement et peut réussir', () async {
+      final clientRepository = _FakeClientRepository({'client-1': _client(id: 'client-1', portalUid: null)});
+      final portalRepository = _FakeClientPortalRepository([_portal(portalUid: 'portal-1', clientId: 'client-1')])
+        ..failNextCalls = 1;
+      final service = ClientPortalReconciliationService(
+        artisanUid: 'artisan-1',
+        clientRepository: clientRepository,
+        clientPortalRepository: portalRepository,
+      );
+
+      await expectLater(service.reconcileOnce(), throwsException);
+
+      final report = await service.reconcileOnce();
+
+      expect(portalRepository.listCallCount, 2); // vraiment retenté, pas juste rejoué depuis un cache
+      expect(report.repairedCount, 1);
+    });
+
+    test('un succès, lui, reste bien mis en cache après coup (pas de sur-correction)', () async {
+      final clientRepository = _FakeClientRepository({'client-1': _client(id: 'client-1', portalUid: null)});
+      final portalRepository = _FakeClientPortalRepository([_portal(portalUid: 'portal-1', clientId: 'client-1')]);
+      final service = ClientPortalReconciliationService(
+        artisanUid: 'artisan-1',
+        clientRepository: clientRepository,
+        clientPortalRepository: portalRepository,
+      );
+
+      await service.reconcileOnce();
+      await service.reconcileOnce();
+
+      expect(portalRepository.listCallCount, 1); // toujours mis en cache quand ça réussit
     });
   });
 }

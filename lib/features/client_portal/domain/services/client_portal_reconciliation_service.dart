@@ -38,7 +38,19 @@ class ClientPortalReconciliationService {
         _clientRepository = clientRepository,
         _clientPortalRepository = clientPortalRepository;
 
-  Future<ClientPortalReconciliationReport> reconcileOnce() => _sessionReconciliation ??= _reconcile();
+  /// Une seule exécution par session, mais seulement quand elle réussit :
+  /// un échec (pas de réseau au lancement, par exemple) n'est jamais mis en
+  /// cache — sans ça, un seul échec bloquerait tout retry pour le reste de
+  /// la session, jamais réparé tant que l'app n'est pas relancée.
+  Future<ClientPortalReconciliationReport> reconcileOnce() {
+    return _sessionReconciliation ??= _reconcile().then(
+      (report) => report,
+      onError: (Object error, StackTrace stackTrace) {
+        _sessionReconciliation = null;
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+  }
 
   Future<ClientPortalReconciliationReport> _reconcile() async {
     final portals = await _clientPortalRepository.listPortalsForArtisan(_artisanUid);
