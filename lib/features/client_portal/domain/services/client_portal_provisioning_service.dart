@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:worklog_pro/features/client_portal/domain/repositories/client_portal_repository.dart';
 import 'package:worklog_pro/features/client_portal/domain/services/portal_account_provisioner.dart';
 import 'package:worklog_pro/features/client_portal/domain/services/portal_invite_email_sender.dart';
@@ -55,12 +56,24 @@ class ClientPortalProvisioningResult {
 
   final String email;
 
+  /// Code technique brut (ex. FirebaseException.code) — seulement sur les
+  /// issues qui viennent d'un catch générique (authCreationFailed,
+  /// profileCreationFailedAndCompensated, profileCreationFailedOrphaned,
+  /// inviteEmailFailed) : deux causes différentes (App Check,
+  /// permission-denied, réseau...) produisent le même message sans ça,
+  /// obligeant à rouvrir la console pour distinguer. emailAlreadyInUse et
+  /// invalidEmail n'en ont pas besoin, ce sont déjà des exceptions dédiées.
+  final String? errorDetail;
+
   const ClientPortalProvisioningResult({
     required this.outcome,
     required this.email,
     this.portalUid,
+    this.errorDetail,
   });
 }
+
+String _describeError(Object e) => e is FirebaseException ? e.code : e.toString();
 
 /// Séquence de provisioning d'un compte portail — voir le commentaire de
 /// chaque valeur de [ClientPortalProvisioningOutcome] pour le comportement
@@ -107,8 +120,12 @@ class ClientPortalProvisioningService {
         return ClientPortalProvisioningResult(outcome: ClientPortalProvisioningOutcome.emailAlreadyInUse, email: email);
       } on PortalInvalidEmailException {
         return ClientPortalProvisioningResult(outcome: ClientPortalProvisioningOutcome.invalidEmail, email: email);
-      } catch (_) {
-        return ClientPortalProvisioningResult(outcome: ClientPortalProvisioningOutcome.authCreationFailed, email: email);
+      } catch (e) {
+        return ClientPortalProvisioningResult(
+          outcome: ClientPortalProvisioningOutcome.authCreationFailed,
+          email: email,
+          errorDetail: _describeError(e),
+        );
       }
 
       try {
@@ -117,7 +134,7 @@ class ClientPortalProvisioningService {
           artisanUid: artisanUid,
           clientId: clientId,
         );
-      } catch (_) {
+      } catch (e) {
         final compensated = await _tryDeleteJustCreatedAccount(provisioner);
         return ClientPortalProvisioningResult(
           outcome: compensated
@@ -125,6 +142,7 @@ class ClientPortalProvisioningService {
               : ClientPortalProvisioningOutcome.profileCreationFailedOrphaned,
           email: email,
           portalUid: compensated ? null : portalUid,
+          errorDetail: _describeError(e),
         );
       }
 
@@ -144,11 +162,12 @@ class ClientPortalProvisioningService {
       // qu'à l'artisan et au mirroring.
       try {
         await _inviteEmailSender.sendInvite(email: email);
-      } catch (_) {
+      } catch (e) {
         return ClientPortalProvisioningResult(
           outcome: ClientPortalProvisioningOutcome.inviteEmailFailed,
           email: email,
           portalUid: portalUid,
+          errorDetail: _describeError(e),
         );
       }
 

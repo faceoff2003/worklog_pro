@@ -125,14 +125,14 @@ void _showOutcomeSnackBar(
     case ClientPortalProvisioningOutcome.authCreationFailed:
       messenger.showSnackBar(SnackBar(
         backgroundColor: Colors.red.shade700,
-        content: const Text('Échec de la création du compte. Réessayez.'),
+        content: Text('Échec de la création du compte. Réessayez. (${result.errorDetail})'),
       ));
     case ClientPortalProvisioningOutcome.profileCreationFailedAndCompensated:
       messenger.showSnackBar(SnackBar(
         backgroundColor: Colors.red.shade700,
-        content: const Text(
+        content: Text(
           'Échec après création du compte — le compte créé a été supprimé automatiquement. '
-          'Vous pouvez réessayer.',
+          'Vous pouvez réessayer. (${result.errorDetail})',
         ),
       ));
     case ClientPortalProvisioningOutcome.linkPendingAutomaticRepair:
@@ -181,6 +181,10 @@ class _OrphanResultDialog extends StatelessWidget {
             _CopyableField(label: 'Email', value: result.email),
             const SizedBox(height: 8),
             _CopyableField(label: 'UID', value: result.portalUid!),
+            if (result.errorDetail != null) ...[
+              const SizedBox(height: 8),
+              _CopyableField(label: 'Code', value: result.errorDetail!),
+            ],
           ],
         ),
       ),

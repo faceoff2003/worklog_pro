@@ -11,6 +11,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:worklog_pro/core/constants/constants.dart';
@@ -208,21 +209,28 @@ void main() {
     expect(find.text('Adresse email invalide.'), findsOneWidget);
   });
 
-  testWidgets('authCreationFailed — message générique distinct des deux précédents', (tester) async {
-    final fakes = _Fakes();
-    fakes.provisioner.throwOnCreateAccount = Exception('panne réseau');
-    await _pumpDialog(tester, fakes: fakes);
-    await tester.tap(find.text('Créer le portail'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Échec de la création du compte. Réessayez.'), findsOneWidget);
-  });
-
   testWidgets(
-    'profileCreationFailedAndCompensated — dit que le compte a été supprimé, jamais qu\'il n\'a pas été créé',
+    'authCreationFailed — message générique distinct des deux précédents, avec le code technique brut '
+    '(deux causes différentes ne doivent pas produire le même texte)',
     (tester) async {
       final fakes = _Fakes();
-      fakes.portalRepository.throwOnCreatePortal = Exception('boom');
+      fakes.provisioner.throwOnCreateAccount =
+          FirebaseException(plugin: 'firebase_auth', code: 'network-request-failed');
+      await _pumpDialog(tester, fakes: fakes);
+      await tester.tap(find.text('Créer le portail'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Échec de la création du compte. Réessayez. (network-request-failed)'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'profileCreationFailedAndCompensated — dit que le compte a été supprimé, jamais qu\'il n\'a pas été créé, '
+    'avec le code technique brut',
+    (tester) async {
+      final fakes = _Fakes();
+      fakes.portalRepository.throwOnCreatePortal =
+          FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied');
       await _pumpDialog(tester, fakes: fakes);
       await tester.tap(find.text('Créer le portail'));
       await tester.pumpAndSettle();
@@ -230,7 +238,7 @@ void main() {
       expect(
         find.text(
           'Échec après création du compte — le compte créé a été supprimé automatiquement. '
-          'Vous pouvez réessayer.',
+          'Vous pouvez réessayer. (permission-denied)',
         ),
         findsOneWidget,
       );
@@ -238,10 +246,11 @@ void main() {
   );
 
   testWidgets(
-    'profileCreationFailedOrphaned — dialog persistant (pas de SnackBar), email et uid affichés et copiables',
+    'profileCreationFailedOrphaned — dialog persistant (pas de SnackBar), email, uid ET code technique affichés et copiables',
     (tester) async {
       final fakes = _Fakes();
-      fakes.portalRepository.throwOnCreatePortal = Exception('boom');
+      fakes.portalRepository.throwOnCreatePortal =
+          FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied');
       fakes.provisioner.deleteFailuresBeforeSuccess = 2; // les 2 tentatives échouent
       await _pumpDialog(tester, fakes: fakes);
       await tester.tap(find.text('Créer le portail'));
@@ -250,7 +259,8 @@ void main() {
       expect(find.text('Intervention manuelle nécessaire'), findsOneWidget);
       expect(find.text('jean@example.com'), findsOneWidget);
       expect(find.text('new-portal-uid'), findsOneWidget);
-      expect(find.byIcon(Icons.copy), findsNWidgets(2));
+      expect(find.text('permission-denied'), findsOneWidget);
+      expect(find.byIcon(Icons.copy), findsNWidgets(3));
 
       // Le dialog reste ouvert tant qu'on ne le ferme pas explicitement.
       await tester.pump(const Duration(seconds: 5));
@@ -267,10 +277,10 @@ void main() {
   );
 
   testWidgets(
-    'inviteEmailFailed — même traitement persistant que profileCreationFailedOrphaned',
+    'inviteEmailFailed — même traitement persistant que profileCreationFailedOrphaned, avec le code technique',
     (tester) async {
       final fakes = _Fakes();
-      fakes.inviteEmailSender.throwOnSendInvite = Exception('boom');
+      fakes.inviteEmailSender.throwOnSendInvite = FirebaseException(plugin: 'firebase_auth', code: 'too-many-requests');
       await _pumpDialog(tester, fakes: fakes);
       await tester.tap(find.text('Créer le portail'));
       await tester.pumpAndSettle();
@@ -278,6 +288,7 @@ void main() {
       expect(find.text('Intervention manuelle nécessaire'), findsOneWidget);
       expect(find.text('jean@example.com'), findsOneWidget);
       expect(find.text('new-portal-uid'), findsOneWidget);
+      expect(find.text('too-many-requests'), findsOneWidget);
     },
   );
 
