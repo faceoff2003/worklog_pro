@@ -536,16 +536,26 @@ William avant tout fix, hors périmètre C-PORTAL.
 
 #### Routage de rôle C-PORTAL.7 — un client mal routé peut écrire dans son propre espace artisan (2026-09-08)
 **Problème** : `decideRoleRoute()` (`lib/features/client_portal/presentation/providers/user_role_provider.dart`)
-route vers `HomePage` (artisan) sur TOUTE erreur de `getPortal(uid)` sauf
-`permission-denied` — décision prise après mesure empirique (AVD réel,
-document jamais mis en cache, backend injoignable : le SDK Firestore
-met ~11,7s avant de lâcher `unavailable`, un blocage dur aurait rendu
-l'app inutilisable hors ligne pour l'usage réel de William, cave/vide
-sanitaire).
+route vers `HomePage` (artisan) sur une erreur de `getPortal(uid)`
+identifiée comme réseau (`unavailable`, `deadline-exceeded`,
+`cancelled`, ou le `TimeoutException` du filet 15s) — décision prise
+après mesure empirique (AVD réel, document jamais mis en cache, backend
+injoignable : le SDK Firestore met ~11,7s avant de lâcher
+`unavailable`, un blocage dur aurait rendu l'app inutilisable hors
+ligne pour l'usage réel de William, cave/vide sanitaire).
+
+**Révisé le même jour** : la version initiale routait TOUTE erreur sauf
+`permission-denied` vers artisan — trop large. Un vrai bug de
+désérialisation (`TypeError` sur `clientPortals/{uid}.createdAt`, voir
+plus bas) a montré qu'une erreur de CODE prenait le même chemin qu'une
+panne réseau, silencieusement. Depuis, seules les erreurs réseau
+listées ci-dessus routent vers artisan ; tout le reste (y compris
+`permission-denied`, `unauthenticated`, une erreur de désérialisation,
+ou un type imprévu) route vers l'écran de blocage.
 
 **Effet de bord accepté, pas corrigé** : un CLIENT dont la vérification
-échoue pour une raison autre que `permission-denied` (typiquement hors
-ligne) atterrit sur `HomePage` et pourrait y créer des documents sous
+échoue pour une raison RÉSEAU (typiquement hors ligne) atterrit sur
+`HomePage` et pourrait y créer des documents sous
 `users/{son_propre_uid}/...` — autorisé par les rules (`isOwner(uid)`,
 c'est son propre espace). Ça ne pollue les données d'aucun artisan réel
 et n'ouvre aucun trou de sécurité (voir CONTEXT.md ci-dessus sur le
@@ -554,9 +564,30 @@ d'un autre), mais laisse des documents orphelins sous cet uid si un
 rôle artisan réel lui était attribué plus tard.
 
 **Non corrigé délibérément** — décision de William (2026-09-08) :
-router vers le blocage sur un code d'erreur imprévu est pire (un
+router vers le blocage sur une vraie panne réseau serait pire (un
 artisan hors ligne bloqué en production) que ce résiduel (des documents
 orphelins sous un uid qui n'a jamais eu de compte artisan légitime).
+
+#### App Check web (I2) — code d'erreur inconnu sur une lecture, risque non mesuré pour un artisan (2026-09-08)
+**Problème** : App Check est confirmé actif côté console pour Firestore
+(SECURITY_AUDIT.md, I2), et le web n'a toujours aucune branche debug
+(voir l'entrée juste en dessous) — dette déjà connue. Ce qui est NOUVEAU
+ici : `decideRoleRoute()` ne route vers artisan que sur un code d'erreur
+réseau précis (`unavailable`/`deadline-exceeded`/`cancelled`). Le code
+qu'une vraie rejection App Check produit sur une LECTURE Firestore n'a
+jamais été mesuré empiriquement — seul l'échec d'une ÉCRITURE (la
+création de portail) a été observé, et le test terrain du 2026-09-08
+qui a trouvé le bug `Timestamp` a justement vu une lecture RÉUSSIR
+malgré App Check actif sur ce même build web.
+
+**Conséquence** : on ne peut pas garantir aujourd'hui qu'un artisan sur
+web, un jour, ne se fera jamais bloquer par ce chemin précis si App
+Check venait à rejeter une lecture avec un code hors de la liste réseau
+(`permission-denied` par exemple, plausible pour ce genre de rejet).
+
+**Pas de mesure faite maintenant, décision explicite de William** : dette
+écrite ici pour ne pas rester un risque flottant non documenté — la
+mesure et un fix éventuel restent à faire, pas dans ce sprint.
 
 #### Tâche à part — migration `dart:html` → `package:web`
 **Problème** : `lib/features/reports/presentation/utils/file_saver_web.dart`

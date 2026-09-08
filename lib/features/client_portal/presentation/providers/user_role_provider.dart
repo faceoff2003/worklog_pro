@@ -1,3 +1,5 @@
+import 'dart:async' show TimeoutException;
+
 import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/features/client_portal/domain/entities/client_portal.dart';
@@ -23,22 +25,28 @@ enum RoleRoute { checking, artisan, clientEnabled, clientDisabled, blocked }
 /// réelles (workEntries, expenses...) restent protégées par firestore.rules
 /// indépendamment de ce que cette fonction décide.
 ///
-/// Décision du 2026-09-08 (mesure empirique à l'appui) : SEUL
-/// permission-denied bloque. Tout le reste (unavailable, deadline-exceeded,
-/// cancelled, TimeoutException du timeout ci-dessus, code imprévu) route
-/// vers artisan — un code d'erreur non anticipé ne doit jamais bloquer un
-/// artisan en production, et router à tort vers artisan n'ouvre aucun trou
-/// de sécurité : users/{uid}/... est scopé par isOwner(uid), un client
-/// mal routé n'y voit et n'y écrit jamais que dans SON PROPRE espace vide,
-/// jamais les données d'un autre artisan.
+/// Décision révisée le 2026-09-08, après un vrai bug (TypeError de
+/// désérialisation sur clientPortals/{uid}.createdAt, voir
+/// client_portal_repository_impl.dart) qui a montré que la version
+/// précédente ("tout sauf permission-denied -> artisan") routait aussi les
+/// erreurs de CODE vers artisan — pas seulement les pannes réseau qu'on
+/// voulait couvrir. Un client dont la lecture plante pour une raison de bug
+/// (désérialisation, exception inattendue) doit voir un écran de blocage,
+/// pas atterrir silencieusement dans l'espace artisan.
 ///
-/// Résiduel accepté, pas corrigé (documenté aussi dans CONTEXT.md § Dette,
-/// 2026-09-08) : un CLIENT hors ligne (ou dont la vérification échoue pour
-/// une raison autre que permission-denied) atterrit sur HomePage et peut
-/// théoriquement y créer des documents sous users/{son_propre_uid}/... —
-/// autorisé par les rules (c'est son propre espace), ça ne pollue les
-/// données d'aucun artisan réel, mais ça laisse des documents orphelins
-/// sous cet uid si jamais un rôle lui était réellement attribué plus tard.
+/// Règle désormais : SEULES les erreurs identifiées comme réseau routent
+/// vers artisan (usage hors ligne, mesuré empiriquement le 2026-09-08 —
+/// voir le commentaire sur userPortalProvider). Tout le reste bloque,
+/// y compris permission-denied, unauthenticated (token invalide/expiré —
+/// un vrai problème d'identité, pas un problème réseau, ne doit pas être
+/// masqué), les erreurs de désérialisation, et tout type imprévu.
+///
+/// Router à tort vers artisan (cas réseau) n'ouvre aucun trou de sécurité :
+/// users/{uid}/... est scopé par isOwner(uid), un client mal routé n'y voit
+/// et n'y écrit jamais que dans SON PROPRE espace vide, jamais les données
+/// d'un autre artisan — résiduel accepté, documenté dans CONTEXT.md § Dette.
+const _networkErrorCodes = {'unavailable', 'deadline-exceeded', 'cancelled'};
+
 RoleRoute decideRoleRoute(AsyncValue<ClientPortal?> state) {
   return state.when(
     data: (portal) {
@@ -47,10 +55,9 @@ RoleRoute decideRoleRoute(AsyncValue<ClientPortal?> state) {
     },
     loading: () => RoleRoute.checking,
     error: (error, _) {
-      if (error is FirebaseException && error.code == 'permission-denied') {
-        return RoleRoute.blocked;
-      }
-      return RoleRoute.artisan;
+      final isNetworkError =
+          error is TimeoutException || (error is FirebaseException && _networkErrorCodes.contains(error.code));
+      return isNetworkError ? RoleRoute.artisan : RoleRoute.blocked;
     },
   );
 }

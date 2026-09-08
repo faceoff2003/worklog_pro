@@ -2,9 +2,13 @@
 // widget) : c'est le seul endroit où la décision "quel écran pour quel état"
 // est prise, testable sans émulateur ni AVD.
 //
-// Règle du 2026-09-08 (décision de William, après mesure empirique — voir
-// user_role_provider.dart) : SEUL permission-denied bloque. Tout le reste
-// route vers artisan, y compris un code d'erreur imprévu — jamais l'inverse.
+// Règle révisée le 2026-09-08, après le bug réel de désérialisation
+// (createdAt Timestamp vs String) qui a montré que "tout sauf
+// permission-denied -> artisan" routait aussi les erreurs de CODE vers
+// artisan — pas seulement les pannes réseau visées. Désormais : SEULES les
+// erreurs réseau identifiées (unavailable, deadline-exceeded, cancelled,
+// TimeoutException) routent vers artisan. Tout le reste bloque, y compris
+// permission-denied, unauthenticated, et les erreurs de désérialisation.
 
 import 'dart:async';
 
@@ -41,12 +45,7 @@ void main() {
     expect(decideRoleRoute(const AsyncValue.loading()), RoleRoute.checking);
   });
 
-  group('error — seul permission-denied bloque, tout le reste route vers artisan', () {
-    test('FirebaseException(code: permission-denied) -> blocked', () {
-      final error = FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied');
-      expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.blocked);
-    });
-
+  group('error — seules les erreurs réseau routent vers artisan, tout le reste bloque', () {
     test('FirebaseException(code: unavailable) -> artisan (mesuré empiriquement, cas réel du terrain)', () {
       final error = FirebaseException(plugin: 'cloud_firestore', code: 'unavailable');
       expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.artisan);
@@ -67,16 +66,39 @@ void main() {
       expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.artisan);
     });
 
-    test('code d\'erreur totalement imprévu (ni FirebaseException, ni TimeoutException) -> artisan, jamais blocked', () {
-      final error = Exception('quelque chose de jamais vu');
-      expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.artisan);
+    test('FirebaseException(code: permission-denied) -> blocked', () {
+      final error = FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied');
+      expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.blocked);
     });
 
     test(
-      'FirebaseException dont le code est autre chose que permission-denied (ex. faute de frappe future) -> artisan',
+      'FirebaseException(code: unauthenticated) -> blocked, PAS artisan — un token invalide est un problème '
+      'd\'identité, pas un problème réseau, ne doit jamais être masqué',
+      () {
+        final error = FirebaseException(plugin: 'cloud_firestore', code: 'unauthenticated');
+        expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.blocked);
+      },
+    );
+
+    test(
+      'erreur de désérialisation (TypeError, le bug réel du 2026-09-08) -> blocked, PAS artisan — '
+      'c\'est exactement le bug qui a motivé cette révision de la règle',
+      () {
+        final error = TypeError();
+        expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.blocked);
+      },
+    );
+
+    test('code d\'erreur totalement imprévu (ni FirebaseException, ni TimeoutException) -> blocked, jamais artisan', () {
+      final error = Exception('quelque chose de jamais vu');
+      expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.blocked);
+    });
+
+    test(
+      'FirebaseException dont le code n\'est pas dans la liste réseau (ex. not-found) -> blocked',
       () {
         final error = FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
-        expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.artisan);
+        expect(decideRoleRoute(AsyncValue.error(error, StackTrace.empty)), RoleRoute.blocked);
       },
     );
   });
