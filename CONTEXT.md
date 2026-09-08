@@ -534,6 +534,30 @@ conditionner `webProvider` sur `kDebugMode` comme pour Android. Touche
 à la sécurité (`main.dart`, activation App Check) — décision de
 William avant tout fix, hors périmètre C-PORTAL.
 
+#### Routage de rôle C-PORTAL.7 — un client mal routé peut écrire dans son propre espace artisan (2026-09-08)
+**Problème** : `decideRoleRoute()` (`lib/features/client_portal/presentation/providers/user_role_provider.dart`)
+route vers `HomePage` (artisan) sur TOUTE erreur de `getPortal(uid)` sauf
+`permission-denied` — décision prise après mesure empirique (AVD réel,
+document jamais mis en cache, backend injoignable : le SDK Firestore
+met ~11,7s avant de lâcher `unavailable`, un blocage dur aurait rendu
+l'app inutilisable hors ligne pour l'usage réel de William, cave/vide
+sanitaire).
+
+**Effet de bord accepté, pas corrigé** : un CLIENT dont la vérification
+échoue pour une raison autre que `permission-denied` (typiquement hors
+ligne) atterrit sur `HomePage` et pourrait y créer des documents sous
+`users/{son_propre_uid}/...` — autorisé par les rules (`isOwner(uid)`,
+c'est son propre espace). Ça ne pollue les données d'aucun artisan réel
+et n'ouvre aucun trou de sécurité (voir CONTEXT.md ci-dessus sur le
+même sujet — un uid client n'a jamais accès à `users/{uid_artisan}/...`
+d'un autre), mais laisse des documents orphelins sous cet uid si un
+rôle artisan réel lui était attribué plus tard.
+
+**Non corrigé délibérément** — décision de William (2026-09-08) :
+router vers le blocage sur un code d'erreur imprévu est pire (un
+artisan hors ligne bloqué en production) que ce résiduel (des documents
+orphelins sous un uid qui n'a jamais eu de compte artisan légitime).
+
 #### Tâche à part — migration `dart:html` → `package:web`
 **Problème** : `lib/features/reports/presentation/utils/file_saver_web.dart`
 (et non `file_saver_util.dart`, comme indiqué par erreur plus bas dans
