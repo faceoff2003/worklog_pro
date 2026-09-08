@@ -84,6 +84,10 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   Future<void> mirrorExpense(String portalUid, Expense expense) => throw UnimplementedError();
   @override
   Future<void> deleteMirroredExpense(String portalUid, String expenseId) => throw UnimplementedError();
+  @override
+  Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries) => throw UnimplementedError();
+  @override
+  Future<void> mirrorExpensesBatch(String portalUid, List<Expense> expenses) => throw UnimplementedError();
 }
 
 ClientPortal _portal({required String portalUid, required String clientId, String artisanUid = 'artisan-1'}) =>

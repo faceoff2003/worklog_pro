@@ -77,6 +77,24 @@ class ClientPortalRepositoryImpl implements ClientPortalRepository {
   Future<void> deleteMirroredExpense(String portalUid, String expenseId) async {
     await _expensesMirror(portalUid).doc(expenseId).delete();
   }
+
+  @override
+  Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries) async {
+    final batch = _firestore.batch();
+    for (final entry in entries) {
+      batch.set(_workEntriesMirror(portalUid).doc(entry.id), _curatedWorkEntryMirror(entry));
+    }
+    await batch.commit();
+  }
+
+  @override
+  Future<void> mirrorExpensesBatch(String portalUid, List<Expense> expenses) async {
+    final batch = _firestore.batch();
+    for (final expense in expenses) {
+      batch.set(_expensesMirror(portalUid).doc(expense.id), _curatedExpenseMirror(expense));
+    }
+    await batch.commit();
+  }
 }
 
 /// Champs volontairement exclus du miroir WorkEntry : notes ("détails

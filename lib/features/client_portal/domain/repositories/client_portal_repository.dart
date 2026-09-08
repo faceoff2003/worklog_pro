@@ -36,4 +36,14 @@ abstract class ClientPortalRepository {
   /// deleteMirroredExpense.
   Future<void> mirrorExpense(String portalUid, Expense expense);
   Future<void> deleteMirroredExpense(String portalUid, String expenseId);
+
+  /// Primitives bas niveau pour ClientPortalHistoryBackfillService — UN
+  /// seul WriteBatch Firestore, donc AU PLUS 500 éléments (limite du SDK,
+  /// pas vérifiée ici : c'est l'appelant qui découpe et compte). Un
+  /// WriteBatch est tout ou rien : un seul document qui violerait une rule
+  /// (ex. une dépense non refacturable) ferait échouer tout le lot — c'est
+  /// pour ça que le filtre isBillable doit être fait par l'appelant, jamais
+  /// ici ni laissé à la rule.
+  Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries);
+  Future<void> mirrorExpensesBatch(String portalUid, List<Expense> expenses);
 }
