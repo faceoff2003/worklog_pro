@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/features/auth/presentation/pages/login_page.dart';
 import 'package:worklog_pro/features/auth/presentation/providers/auth_provider.dart';
-import 'package:worklog_pro/features/home/presentation/pages/home_page.dart';
+import 'package:worklog_pro/features/client_portal/presentation/pages/post_auth_role_router.dart';
 
 /// Authentication wrapper that decides which screen to show.
 /// 
@@ -18,8 +18,9 @@ class AuthWrapper extends ConsumerWidget {
     return authState.when(
       data: (user) {
         if (user != null) {
-          // User is authenticated, show home screen
-          return const HomePage();
+          // Authentifié : le rôle (artisan/client) se décide ici, jamais
+          // ailleurs — voir PostAuthRoleRouter.
+          return PostAuthRoleRouter(uid: user.uid);
         } else {
           // User is not authenticated, show login
           return const LoginPage();
