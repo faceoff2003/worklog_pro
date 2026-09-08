@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/features/client_portal/domain/services/client_portal_provisioning_service.dart';
+import 'package:worklog_pro/features/client_portal/presentation/providers/client_portal_backfill_provider.dart';
 import 'package:worklog_pro/features/client_portal/presentation/providers/client_portal_provider.dart';
+import 'package:worklog_pro/features/client_portal/presentation/widgets/backfill_outcome_feedback.dart';
 import 'package:worklog_pro/features/clients/domain/entities/client.dart';
 
 /// Ouvre le dialog de création de portail. L'appelant DOIT avoir déjà validé
@@ -51,6 +53,17 @@ class _CreatePortalDialog extends ConsumerWidget {
       final container = ProviderScope.containerOf(context, listen: false);
       Navigator.of(context).pop();
       _showOutcomeSnackBar(messenger, container, result);
+
+      // Portail utilisable dans les deux cas (le lien Client.portalUid est
+      // non bloquant, réparé automatiquement si besoin) — reprise
+      // automatique de l'historique existant, best-effort : un échec ici ne
+      // remet jamais en cause la création qui vient de réussir, le bouton
+      // "Reprendre l'historique" de ClientDetailPage reste toujours là pour
+      // réessayer (C-PORTAL.9).
+      if (result.outcome == ClientPortalProvisioningOutcome.success ||
+          result.outcome == ClientPortalProvisioningOutcome.linkPendingAutomaticRepair) {
+        _runInitialBackfillAndNotify(container, messenger, result.portalUid!, client.id);
+      }
     });
 
     final result = state.valueOrNull;
@@ -146,6 +159,23 @@ void _showOutcomeSnackBar(
     case ClientPortalProvisioningOutcome.inviteEmailFailed:
       break; // rendu par _OrphanResultDialog, jamais par SnackBar
   }
+}
+
+/// Fire-and-forget délibéré depuis le container survivant (voir le
+/// commentaire au point d'appel) — ce SnackBar arrive donc APRÈS et
+/// SÉPARÉMENT de celui de _showOutcomeSnackBar, jamais fusionné avec lui :
+/// la création peut réussir pendant que la reprise, elle, échoue ou reste
+/// incomplète, deux issues indépendantes qui méritent chacune leur message.
+Future<void> _runInitialBackfillAndNotify(
+  ProviderContainer container,
+  ScaffoldMessengerState messenger,
+  String portalUid,
+  String clientId,
+) async {
+  final controller = container.read(clientPortalHistoryBackfillControllerProvider.notifier);
+  await controller.runBackfill(portalUid: portalUid, clientId: clientId);
+  final state = container.read(clientPortalHistoryBackfillControllerProvider);
+  messenger.showSnackBar(state.hasError ? backfillErrorSnackBar() : backfillOutcomeSnackBar(state.value!));
 }
 
 class _OrphanResultDialog extends StatelessWidget {

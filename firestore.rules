@@ -394,17 +394,28 @@ service cloud.firestore {
         && request.resource.data.artisanUid == resource.data.artisanUid
         && request.resource.data.clientId == resource.data.clientId;
 
-      // Client : ne peut modifier aucun des quatre champs porteurs
-      // d'identité/permission, quels que soient les autres champs touchés
-      // dans la même écriture — comparaison à la valeur STOCKÉE, pas à une
-      // constante, donc un update qui repasse enabled à sa valeur actuelle
-      // en changeant autre chose passe ; toute tentative de le faire
-      // varier échoue, noyée dans un update multi-champs ou non.
+      // Client : ne peut modifier aucun des champs porteurs
+      // d'identité/permission/diagnostic, quels que soient les autres champs
+      // touchés dans la même écriture — comparaison à la valeur STOCKÉE, pas
+      // à une constante, donc un update qui repasse enabled à sa valeur
+      // actuelle en changeant autre chose passe ; toute tentative de le
+      // faire varier échoue, noyée dans un update multi-champs ou non.
+      //
+      // Les 4 compteurs backfill* (C-PORTAL.9) sont inclus ici pour la même
+      // raison que les autres : un client qui les gonflerait lui-même
+      // pourrait faire croire à l'artisan qu'un backfill est complet alors
+      // qu'il ne l'est pas. Écrits uniquement par ClientPortalRepositoryImpl
+      // côté artisan (règle update ci-dessus, déjà permissive sur "tout sauf
+      // identité").
       allow update: if isOwner(portalUid)
         && request.resource.data.enabled == resource.data.enabled
         && request.resource.data.artisanUid == resource.data.artisanUid
         && request.resource.data.clientId == resource.data.clientId
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.get('backfillWorkEntriesTotal', null) == resource.data.get('backfillWorkEntriesTotal', null)
+        && request.resource.data.get('backfillWorkEntriesMirrored', null) == resource.data.get('backfillWorkEntriesMirrored', null)
+        && request.resource.data.get('backfillExpensesTotal', null) == resource.data.get('backfillExpensesTotal', null)
+        && request.resource.data.get('backfillExpensesMirrored', null) == resource.data.get('backfillExpensesMirrored', null);
     }
 
     match /clientPortals/{portalUid}/workEntries/{entryId} {

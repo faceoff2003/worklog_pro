@@ -77,6 +77,57 @@ class ClientPortalRepositoryImpl implements ClientPortalRepository {
   Future<void> deleteMirroredExpense(String portalUid, String expenseId) async {
     await _expensesMirror(portalUid).doc(expenseId).delete();
   }
+
+  @override
+  Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries) async {
+    final batch = _firestore.batch();
+    for (final entry in entries) {
+      batch.set(_workEntriesMirror(portalUid).doc(entry.id), _curatedWorkEntryMirror(entry));
+    }
+    await batch.commit();
+  }
+
+  @override
+  Future<void> mirrorExpensesBatch(String portalUid, List<Expense> expenses) async {
+    final batch = _firestore.batch();
+    for (final expense in expenses) {
+      batch.set(_expensesMirror(portalUid).doc(expense.id), _curatedExpenseMirror(expense));
+    }
+    await batch.commit();
+  }
+
+  @override
+  Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) async {
+    // update(), pas set() : ne touche jamais artisanUid/clientId/enabled/
+    // createdAt, écrits une seule fois par createPortal(). Champs
+    // volontairement absents de ClientPortal.fromJson (voir sa note de
+    // classe) — décodés uniquement ici, jamais via getPortal().
+    await _portalDoc(portalUid).update({
+      'backfillWorkEntriesTotal': outcome.totalWorkEntries,
+      'backfillWorkEntriesMirrored': outcome.mirroredWorkEntries,
+      'backfillExpensesTotal': outcome.totalExpenses,
+      'backfillExpensesMirrored': outcome.mirroredExpenses,
+    });
+  }
+
+  @override
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid) async {
+    // PAS de get() direct : allow get exige isOwner(portalUid), fermé à
+    // l'artisan (vérifié empiriquement, voir la note sur l'interface).
+    // Même requête filtrée que listPortalsForArtisan, filtrée à nouveau
+    // côté client par portalUid — aucune nouvelle rule.
+    final snapshot = await _firestore.collection('clientPortals').where('artisanUid', isEqualTo: artisanUid).get();
+    final matches = snapshot.docs.where((doc) => doc.id == portalUid);
+    if (matches.isEmpty) return null;
+    final data = matches.first.data();
+    if (!data.containsKey('backfillWorkEntriesTotal')) return null;
+    return BackfillOutcome(
+      totalWorkEntries: data['backfillWorkEntriesTotal'] as int,
+      mirroredWorkEntries: data['backfillWorkEntriesMirrored'] as int,
+      totalExpenses: data['backfillExpensesTotal'] as int,
+      mirroredExpenses: data['backfillExpensesMirrored'] as int,
+    );
+  }
 }
 
 /// Champs volontairement exclus du miroir WorkEntry : notes ("détails

@@ -9,6 +9,15 @@ part 'client_portal.g.dart';
 /// le repository comme pour Client/WorkEntry/Expense. artisanUid et
 /// clientId sont immuables une fois créés (voir firestore.rules) ; enabled
 /// est le seul champ que l'artisan peut modifier ensuite.
+///
+/// Le document Firestore porte aussi les compteurs de reprise d'historique
+/// (backfillWorkEntriesTotal, etc. — voir ClientPortalRepository.
+/// saveBackfillStatus/getBackfillStatus) : EXCLUS DÉLIBÉRÉMENT d'ici. Comme
+/// fromJson() ignore les clés inconnues (pas de disallowUnknownKeys), ceci
+/// est une garantie structurelle, pas juste une convention : un ClientPortal
+/// ne peut physiquement jamais porter ces compteurs, donc decideRoleRoute()
+/// (qui ne voit que des ClientPortal) ne peut structurellement pas en
+/// dépendre. Lus par une voie séparée (getBackfillStatus), jamais ici.
 @freezed
 abstract class ClientPortal with _$ClientPortal {
   const factory ClientPortal({

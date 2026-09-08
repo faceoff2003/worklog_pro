@@ -814,6 +814,47 @@ describe('clientPortals/{portalUid} — profil', () => {
       );
     },
   );
+
+  test(
+    'update — le client tente d\'écrire lui-même un compteur de backfill (C-PORTAL.9) → refusé',
+    async () => {
+      await seedPortal(CLIENT, {
+        backfillWorkEntriesTotal: 20,
+        backfillWorkEntriesMirrored: 3,
+      });
+      await assertFails(
+        portalDocRef(clientDb(), CLIENT).update({ backfillWorkEntriesMirrored: 20 }),
+      );
+    },
+  );
+
+  test(
+    'update — le client tente de gonfler un compteur backfill NOYÉ dans un update multi-champs → refusé',
+    async () => {
+      await seedPortal(CLIENT, {
+        displayName: 'Ancien nom',
+        backfillExpensesTotal: 5,
+        backfillExpensesMirrored: 0,
+      });
+      await assertFails(
+        portalDocRef(clientDb(), CLIENT).update({
+          displayName: 'Nouveau nom',
+          backfillExpensesMirrored: 5,
+        }),
+      );
+    },
+  );
+
+  test(
+    'update — le client modifie displayName sur un portail SANS aucun champ backfill (créé avant C-PORTAL.9, ' +
+      'ex. le portail BGS) → autorisé (le fix ne doit pas casser les documents existants)',
+    async () => {
+      await seedPortal(CLIENT, { displayName: 'Ancien nom' }); // aucun champ backfill* seedé
+      await assertSucceeds(
+        portalDocRef(clientDb(), CLIENT).update({ displayName: 'Nouveau nom' }),
+      );
+    },
+  );
 });
 
 describe('clientPortals — list() filtré pour l\'artisan (réparation d\'un lien manquant)', () => {
@@ -866,6 +907,39 @@ describe('clientPortals — list() filtré pour l\'artisan (réparation d\'un li
         clientDb().collection('clientPortals').where('artisanUid', '==', CLIENT).get(),
       );
       assert.equal(snap.size, 0);
+    },
+  );
+
+  test(
+    'artisan lié — lit le statut de backfill de SON portail en réutilisant list() (C-PORTAL.9 étape 3, ' +
+      'pas de nouvelle rule : allow get exige isOwner, seul allow list est ouvert à l\'artisan)',
+    async () => {
+      await seedPortal(CLIENT, {
+        artisanUid: ARTISAN,
+        backfillWorkEntriesTotal: 20,
+        backfillWorkEntriesMirrored: 20,
+      });
+
+      const snap = await assertSucceeds(
+        artisanDb().collection('clientPortals').where('artisanUid', '==', ARTISAN).get(),
+      );
+      const doc = snap.docs.find((d) => d.id === CLIENT);
+      assert.ok(doc, 'le document du client lié doit apparaître dans les résultats filtrés par artisanUid');
+      assert.equal(doc.data().backfillWorkEntriesTotal, 20);
+      assert.equal(doc.data().backfillWorkEntriesMirrored, 20);
+    },
+  );
+
+  test(
+    'artisan NON lié à ce portail — sa requête filtrée par SON PROPRE artisanUid ne contient jamais ce document ' +
+      '(pas d\'erreur, juste absent des résultats : même mécanisme que listPortalsForArtisan)',
+    async () => {
+      await seedPortal(CLIENT, { artisanUid: ARTISAN, backfillWorkEntriesTotal: 20 });
+
+      const snap = await assertSucceeds(
+        otherArtisanDb().collection('clientPortals').where('artisanUid', '==', OTHER_ARTISAN).get(),
+      );
+      assert.equal(snap.docs.find((d) => d.id === CLIENT), undefined);
     },
   );
 
