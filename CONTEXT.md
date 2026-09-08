@@ -644,6 +644,36 @@ router vers le blocage sur une vraie panne réseau serait pire (un
 artisan hors ligne bloqué en production) que ce résiduel (des documents
 orphelins sous un uid qui n'a jamais eu de compte artisan légitime).
 
+#### Miroir client (C-PORTAL.8) — un flux rouvert après désactivation sert quand même les données (mesuré le 2026-09-08)
+**Mesuré empiriquement contre la VRAIE prod** (pas l'émulateur —
+confirmé sur les deux, mais c'est la prod qui compte), Android, avec
+un artisan et un client réels :
+
+```
+Flux DÉJÀ ouvert, avant désactivation           -> reçoit les données normalement
+CE MÊME flux, après désactivation (5s après)    -> ERREUR permission-denied (coupé correctement)
+get() frais, après désactivation                -> permission-denied
+snapshots() FRAIS (nouveau), après désactivation -> AUCUNE erreur, données renvoyées quand même
+```
+
+Un flux **déjà ouvert** au moment de la désactivation est bien coupé
+avec une erreur — c'est le scénario réel qui compte (un client déjà
+sur `ClientHomePage`, désactivé en cours de route). Un flux
+**nouvellement rouvert après coup** ne l'est pas : Firestore continue
+de servir les données comme si le portail était encore actif, sans
+erreur. Aucune documentation officielle Firestore trouvée confirmant
+ce mécanisme (recherché avant de conclure) — c'est un comportement réel
+mesuré, pas déduit d'une doc.
+
+**Résiduel accepté, pas corrigé** — calibré explicitement par William :
+désactiver un portail n'est pas une révocation d'urgence dans son
+usage. Le client concerné ne voit que **ses propres prestations**,
+quelques minutes de plus tout au plus (jusqu'à sa prochaine
+reconnexion complète, qui repasse par `PostAuthRoleRouter` et son
+`.get()` — protégé, voir C-PORTAL.7 ci-dessus) — jamais les données
+d'un tiers. Pas une architecture de révocation temps réel voulue ni
+nécessaire pour ce niveau de risque.
+
 #### App Check web (I2) — code d'erreur inconnu sur une lecture, risque non mesuré pour un artisan (2026-09-08)
 **Problème** : App Check est confirmé actif côté console pour Firestore
 (SECURITY_AUDIT.md, I2), et le web n'a toujours aucune branche debug
