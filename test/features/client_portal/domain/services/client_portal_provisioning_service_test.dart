@@ -97,6 +97,10 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries) => throw UnimplementedError();
   @override
   Future<void> mirrorExpensesBatch(String portalUid, List<Expense> expenses) => throw UnimplementedError();
+  @override
+  Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) => throw UnimplementedError();
+  @override
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid) => throw UnimplementedError();
 }
 
 class _FakeClientRepository implements ClientRepository {

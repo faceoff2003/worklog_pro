@@ -95,6 +95,32 @@ class ClientPortalRepositoryImpl implements ClientPortalRepository {
     }
     await batch.commit();
   }
+
+  @override
+  Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) async {
+    // update(), pas set() : ne touche jamais artisanUid/clientId/enabled/
+    // createdAt, écrits une seule fois par createPortal(). Champs
+    // volontairement absents de ClientPortal.fromJson (voir sa note de
+    // classe) — décodés uniquement ici, jamais via getPortal().
+    await _portalDoc(portalUid).update({
+      'backfillWorkEntriesTotal': outcome.totalWorkEntries,
+      'backfillWorkEntriesMirrored': outcome.mirroredWorkEntries,
+      'backfillExpensesTotal': outcome.totalExpenses,
+      'backfillExpensesMirrored': outcome.mirroredExpenses,
+    });
+  }
+
+  @override
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid) async {
+    final data = (await _portalDoc(portalUid).get()).data();
+    if (data == null || !data.containsKey('backfillWorkEntriesTotal')) return null;
+    return BackfillOutcome(
+      totalWorkEntries: data['backfillWorkEntriesTotal'] as int,
+      mirroredWorkEntries: data['backfillWorkEntriesMirrored'] as int,
+      totalExpenses: data['backfillExpensesTotal'] as int,
+      mirroredExpenses: data['backfillExpensesMirrored'] as int,
+    );
+  }
 }
 
 /// Champs volontairement exclus du miroir WorkEntry : notes ("détails

@@ -46,4 +46,37 @@ abstract class ClientPortalRepository {
   /// ici ni laissé à la rule.
   Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries);
   Future<void> mirrorExpensesBatch(String portalUid, List<Expense> expenses);
+
+  /// Statut persisté de la dernière reprise d'historique — voie de lecture
+  /// et d'écriture SÉPARÉE de getPortal()/ClientPortal : ces compteurs ne
+  /// vivent JAMAIS dans l'entité partagée, pour que decideRoleRoute() ne
+  /// puisse structurellement jamais en dépendre. Écriture réservée à
+  /// l'artisan lié (règle déjà en place sur le profil), immuable côté
+  /// client (voir firestore.rules).
+  Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome);
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid);
+}
+
+/// Compteurs séparés par collection — jamais agrégés. Un artisan doit
+/// pouvoir voir "20/20 prestations, 0/5 dépenses" et savoir exactement
+/// laquelle des deux a échoué, pas un total masquant lequel des deux a
+/// foiré (décidé avec William avant de coder ceci). Défini ici, pas dans le
+/// service : c'est aussi le type persisté par saveBackfillStatus/
+/// getBackfillStatus ci-dessus.
+class BackfillOutcome {
+  final int totalWorkEntries;
+  final int mirroredWorkEntries;
+  final int totalExpenses;
+  final int mirroredExpenses;
+
+  const BackfillOutcome({
+    required this.totalWorkEntries,
+    required this.mirroredWorkEntries,
+    required this.totalExpenses,
+    required this.mirroredExpenses,
+  });
+
+  bool get workEntriesComplete => mirroredWorkEntries == totalWorkEntries;
+  bool get expensesComplete => mirroredExpenses == totalExpenses;
+  bool get isComplete => workEntriesComplete && expensesComplete;
 }

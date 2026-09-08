@@ -814,6 +814,47 @@ describe('clientPortals/{portalUid} — profil', () => {
       );
     },
   );
+
+  test(
+    'update — le client tente d\'écrire lui-même un compteur de backfill (C-PORTAL.9) → refusé',
+    async () => {
+      await seedPortal(CLIENT, {
+        backfillWorkEntriesTotal: 20,
+        backfillWorkEntriesMirrored: 3,
+      });
+      await assertFails(
+        portalDocRef(clientDb(), CLIENT).update({ backfillWorkEntriesMirrored: 20 }),
+      );
+    },
+  );
+
+  test(
+    'update — le client tente de gonfler un compteur backfill NOYÉ dans un update multi-champs → refusé',
+    async () => {
+      await seedPortal(CLIENT, {
+        displayName: 'Ancien nom',
+        backfillExpensesTotal: 5,
+        backfillExpensesMirrored: 0,
+      });
+      await assertFails(
+        portalDocRef(clientDb(), CLIENT).update({
+          displayName: 'Nouveau nom',
+          backfillExpensesMirrored: 5,
+        }),
+      );
+    },
+  );
+
+  test(
+    'update — le client modifie displayName sur un portail SANS aucun champ backfill (créé avant C-PORTAL.9, ' +
+      'ex. le portail BGS) → autorisé (le fix ne doit pas casser les documents existants)',
+    async () => {
+      await seedPortal(CLIENT, { displayName: 'Ancien nom' }); // aucun champ backfill* seedé
+      await assertSucceeds(
+        portalDocRef(clientDb(), CLIENT).update({ displayName: 'Nouveau nom' }),
+      );
+    },
+  );
 });
 
 describe('clientPortals — list() filtré pour l\'artisan (réparation d\'un lien manquant)', () => {

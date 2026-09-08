@@ -1,7 +1,10 @@
-// C-PORTAL.9, étape 1 — le service de backfill seul, aucune UI.
+// C-PORTAL.9, étapes 1 et 2 — le service de backfill seul, aucune UI.
 //
 // Points tranchés avec William avant de coder, tous vérifiés ici :
 // - BackfillOutcome porte les deux compteurs séparément (jamais agrégés).
+// - Le résultat est persisté (saveBackfillStatus) à la fin de
+//   backfillHistory(), même incomplet — sans ça l'indicateur persistant
+//   côté ClientDetailPage (étape 3) n'aurait jamais de source.
 // - Le filtre isBillable sur les dépenses est appliqué AVANT toute
 //   construction de batch — jamais laissé à la rule (un WriteBatch est tout
 //   ou rien, une seule dépense non refacturable ferait échouer tout le
@@ -69,6 +72,9 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   Set<int> failWorkEntryBatchAt = {};
   Set<int> failExpenseBatchAt = {};
 
+  int saveBackfillStatusCallCount = 0;
+  BackfillOutcome? lastSavedBackfillStatus;
+
   @override
   Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries) async {
     final callIndex = workEntryBatchCalls.length;
@@ -82,6 +88,15 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
     expenseBatchCalls.add(expenses);
     if (failExpenseBatchAt.contains(callIndex)) throw Exception('échec simulé (dépenses, batch $callIndex)');
   }
+
+  @override
+  Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) async {
+    saveBackfillStatusCallCount++;
+    lastSavedBackfillStatus = outcome;
+  }
+
+  @override
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid) => throw UnimplementedError();
 
   @override
   Future<ClientPortal?> getPortal(String portalUid) => throw UnimplementedError();
@@ -160,6 +175,20 @@ void main() {
       expect(portalRepo.expenseBatchCalls.length, 1);
     });
 
+    test('le résultat est persisté via saveBackfillStatus, exactement ce que renvoie backfillHistory', () async {
+      workEntryRepo.entries = List.generate(20, (i) => _entry('entry-$i'));
+      expenseRepo.expenses = List.generate(5, (i) => _expense('expense-$i'));
+
+      final outcome = await run();
+
+      expect(portalRepo.saveBackfillStatusCallCount, 1);
+      expect(portalRepo.lastSavedBackfillStatus, isNotNull);
+      expect(portalRepo.lastSavedBackfillStatus!.totalWorkEntries, outcome.totalWorkEntries);
+      expect(portalRepo.lastSavedBackfillStatus!.mirroredWorkEntries, outcome.mirroredWorkEntries);
+      expect(portalRepo.lastSavedBackfillStatus!.totalExpenses, outcome.totalExpenses);
+      expect(portalRepo.lastSavedBackfillStatus!.mirroredExpenses, outcome.mirroredExpenses);
+    });
+
     test('découpage en plusieurs batchs au-delà de 500', () async {
       workEntryRepo.entries = List.generate(1200, (i) => _entry('entry-$i'));
 
@@ -231,6 +260,21 @@ void main() {
         expect(outcome.mirroredExpenses, 5, reason: 'l\'échec des prestations ne doit jamais empêcher la tentative des dépenses');
         expect(outcome.expensesComplete, isTrue);
         expect(portalRepo.expenseBatchCalls.length, 1, reason: 'les dépenses ont bien été tentées malgré l\'échec des prestations');
+      },
+    );
+
+    test(
+      'un échec partiel est quand même persisté via saveBackfillStatus — c\'est précisément ce qui permet '
+      'à l\'artisan de voir "3/20" plutôt que rien du tout',
+      () async {
+        workEntryRepo.entries = List.generate(20, (i) => _entry('entry-$i'));
+        portalRepo.failWorkEntryBatchAt = {0};
+
+        await run();
+
+        expect(portalRepo.saveBackfillStatusCallCount, 1);
+        expect(portalRepo.lastSavedBackfillStatus!.totalWorkEntries, 20);
+        expect(portalRepo.lastSavedBackfillStatus!.mirroredWorkEntries, 0);
       },
     );
   });

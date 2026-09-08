@@ -7,28 +7,6 @@ import 'package:worklog_pro/features/work_entries/domain/repositories/work_entry
 /// Un WriteBatch Firestore est limité à 500 opérations.
 const _maxBatchSize = 500;
 
-/// Compteurs séparés par collection — jamais agrégés. Un artisan doit
-/// pouvoir voir "20/20 prestations, 0/5 dépenses" et savoir exactement
-/// laquelle des deux a échoué, pas un total masquant lequel des deux
-/// a foiré (décidé avec William avant de coder ceci).
-class BackfillOutcome {
-  final int totalWorkEntries;
-  final int mirroredWorkEntries;
-  final int totalExpenses;
-  final int mirroredExpenses;
-
-  const BackfillOutcome({
-    required this.totalWorkEntries,
-    required this.mirroredWorkEntries,
-    required this.totalExpenses,
-    required this.mirroredExpenses,
-  });
-
-  bool get workEntriesComplete => mirroredWorkEntries == totalWorkEntries;
-  bool get expensesComplete => mirroredExpenses == totalExpenses;
-  bool get isComplete => workEntriesComplete && expensesComplete;
-}
-
 /// Reprend l'historique existant d'un client au moment du provisioning (ou
 /// à la demande, pour un portail déjà créé avant que ce service existe) —
 /// le mirroring en continu (ClientPortalMirrorService) ne couvre que les
@@ -70,12 +48,17 @@ class ClientPortalHistoryBackfillService {
       (chunk) => _clientPortalRepository.mirrorExpensesBatch(portalUid, chunk),
     );
 
-    return BackfillOutcome(
+    final outcome = BackfillOutcome(
       totalWorkEntries: allEntries.length,
       mirroredWorkEntries: mirroredWorkEntries,
       totalExpenses: allExpenses.length,
       mirroredExpenses: mirroredExpenses,
     );
+    // Persisté même incomplet : c'est précisément ce qui permet à
+    // ClientDetailPage (C-PORTAL.9 étape 3) d'afficher un indicateur
+    // durable plutôt qu'un SnackBar éphémère qu'un artisan pourrait manquer.
+    await _clientPortalRepository.saveBackfillStatus(portalUid, outcome);
+    return outcome;
   }
 
   /// Découpe en lots de 500 max, écrit chunk par chunk, s'arrête au premier
