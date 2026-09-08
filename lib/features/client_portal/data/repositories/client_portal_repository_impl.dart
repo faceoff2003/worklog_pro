@@ -36,12 +36,20 @@ class ClientPortalRepositoryImpl implements ClientPortalRepository {
 
   @override
   Future<void> createPortal({required String portalUid, required String artisanUid, required String clientId}) async {
-    await _portalDoc(portalUid).set({
-      'artisanUid': artisanUid,
-      'clientId': clientId,
-      'enabled': true,
-      'createdAt': DateTime.now(),
-    });
+    // Via toJson(), comme Client/WorkEntry/etc. — jamais un Map écrit à la
+    // main : un DateTime brut serait converti par le SDK en Timestamp
+    // Firestore, que fromJson() (qui attend une String ISO8601, comme
+    // partout ailleurs dans ce repo) ne sait pas relire. Bug réel du
+    // 2026-09-08, voir integration_test/client_portal_round_trip_test.dart.
+    final json = ClientPortal(
+      portalUid: portalUid,
+      artisanUid: artisanUid,
+      clientId: clientId,
+      enabled: true,
+      createdAt: DateTime.now(),
+    ).toJson()
+      ..remove('portalUid'); // c'est l'ID du document, pas un champ.
+    await _portalDoc(portalUid).set(json);
   }
 
   @override
