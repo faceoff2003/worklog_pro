@@ -23,6 +23,13 @@
 > **Mise à jour (sprint C-PORTAL, 2026-09-07)** — nouveau finding **CP1**
 > (Medium), trouvé et corrigé partiellement pendant la construction des
 > rules `clientPortals`, **rules non déployées**. Voir §1 pour le détail.
+>
+> **Clôture (sprint C-PORTAL, 2026-09-08)** — bloc `clientPortals`
+> (avec CP1) **déployé et vérifié sur appareil par William** (parcours
+> réel : création de portail, connexion client/artisan). **I2 confirmé
+> actif** pour Firestore — par l'échec réel d'une écriture, pas par la
+> console, voir I2. Aucun autre finding L1-L6/I1-I5 traité, hors
+> périmètre C-PORTAL — voir §7ter pour la clôture complète.
 
 ---
 
@@ -30,7 +37,10 @@
 
 | Sévérité | Nombre |
 |---|---|
-| Medium | 1 (CP1, fix partiel appliqué, résiduel documenté) |
+| Medium | 1 (CP1, fix partiel appliqué, **déployé** le 2026-09-08, résiduel documenté) |
+
+Voir aussi I2 (§3) : confirmé actif pour Firestore pendant ce sprint,
+et §7ter pour la clôture complète.
 
 ---
 
@@ -612,3 +622,36 @@ trouvés en auditant le code réel plutôt que le document :
 - **L1-L6, I1-I5 toujours ouverts** — F-SETTINGS était un sprint de
   synchronisation cloud, pas un sprint sécurité ; aucun de ces findings
   n'était dans son périmètre.
+
+## 7ter. Mise à jour post-clôture (sprint C-PORTAL, 2026-09-08)
+
+- **CP1 déployé** sur `worklog-pro-2b3fb` et **vérifié sur appareil par
+  William** — parcours réel complet (création de portail, connexion
+  client → `ClientHomePage`, connexion artisan → `HomePage` intacte
+  avec ses données). Résiduel documenté (§1bis) toujours ouvert, pas
+  fermable par une rule seule (voir l'argument détaillé).
+- **I2 confirmé actif** pour Firestore — pas par vérification console,
+  mais par l'échec réel d'une écriture (`createPortal()`) pendant le
+  test terrain du build web, App Check non contourné. Ce constat a lui
+  même révélé une dette distincte, non liée à I2 : le web n'a aucune
+  branche debug App Check (contrairement à Android,
+  `AndroidProvider.debug`), documentée dans `CONTEXT.md` § Dette
+  technique plutôt qu'ici — ce n'est pas un finding de sécurité, c'est
+  un défaut d'ergonomie de développement qui a caché un vrai problème
+  plus longtemps que nécessaire.
+- **Nouveau résiduel non-sécurité, documenté dans `CONTEXT.md`** : le
+  code qu'une rejection App Check produirait sur une **lecture**
+  Firestore (par opposition à l'écriture déjà observée) n'a jamais été
+  mesuré. `decideRoleRoute()` ne route vers artisan que sur un code
+  réseau précis (`unavailable`/`deadline-exceeded`/`cancelled`) — si
+  App Check rejetait un jour une lecture avec un code hors de cette
+  liste, un artisan légitime sur web se verrait bloqué. Pas mesuré, pas
+  corrigé, décision explicite de William de l'écrire plutôt que de le
+  laisser flottant.
+- **L1-L6, I1, I3-I5 toujours ouverts** — C-PORTAL était un sprint
+  fonctionnel (portail client), pas un sprint sécurité généraliste ;
+  seul CP1 (trouvé pendant ce sprint) et I2 (confirmé en cours de
+  route) étaient dans son périmètre effectif.
+
+Détail complet du sprint (les 7 étapes, la leçon sur la stratégie de
+test) dans `doc/C-PORTAL_SPRINT_REPORT.md`.

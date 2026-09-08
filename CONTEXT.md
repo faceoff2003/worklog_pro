@@ -3,6 +3,10 @@
 > **Resynchronisé post-sprint R-SEC le 2026-09-06** (le document était resté
 > figé post W-FIX1 pendant tout le sprint-3 et le sprint R-SEC — voir §9, §10,
 > §12 pour ce qui a changé)
+> **Resynchronisé post-sprint C-PORTAL le 2026-09-08** (portail client :
+> §5 nouvelle collection `clientPortals`, §6 nouveaux écrans, §9 fixes +
+> dette, §10 rules déployées + I2 confirmé, §12 — voir aussi
+> `doc/C-PORTAL_SPRINT_REPORT.md`)
 > Basé exclusivement sur le code source réel
 
 ---
@@ -328,6 +332,41 @@ R-SEC.2 (`allow delete: if false`)** après confirmation que
 `deleteSettlement()` existe dans `settlement_repository_impl.dart`
 mais n'est appelé par aucune page/widget (voir SECURITY_AUDIT.md M2).
 
+### `clientPortals/{portalUid}` (C-PORTAL, sprint 2026-09-08)
+**Seule collection de tout le repo qui n'est PAS une sous-collection de
+`users/{userId}`** — délibéré : la clé est l'uid du CLIENT
+(`portalUid`, = son propre uid Firebase Auth), jamais celui de
+l'artisan. Un client n'a donc jamais besoin de connaître l'uid de son
+artisan pour lire son propre espace ; c'est aussi ce qui rend la règle
+de lecture triviale (`isOwner(portalUid)`, un seul niveau).
+
+| Champ | Type | Notes |
+|---|---|---|
+| artisanUid | string | uid de l'artisan propriétaire du lien — immuable |
+| clientId | string | FK → `users/{artisanUid}/clients/{clientId}` — immuable |
+| enabled | bool | seul champ modifiable par l'artisan ensuite ; ne gate que le CLIENT, jamais le mirroring en tâche de fond |
+| displayName | string? | modifiable par le client lui-même |
+| createdAt | timestamp | écrit via `ClientPortal(...).toJson()` (String ISO8601) — **était écrit en `DateTime` brut avant le 2026-09-08**, converti en `Timestamp` par le SDK, illisible par `fromJson()` ; voir § Dette pour le détail du bug et son fix |
+
+**Sous-collections**, miroir en lecture seule pour le client, écrites
+uniquement par l'artisan lié :
+- `clientPortals/{portalUid}/workEntries/{entryId}` — copie curée d'un
+  `WorkEntry` (`notes`, `tags`, `timerUsed`, `attachments` retirés —
+  détails internes à l'artisan, sans sens côté portail).
+- `clientPortals/{portalUid}/expenses/{expenseId}` — copie curée d'un
+  `Expense`, uniquement si `isBillable == true` (réaffirmé dans les
+  rules, pas seulement côté Dart).
+- `clientPortals/{portalUid}/workEntries/{entryId}/portalComments/{commentId}` —
+  commentaires du client sur une prestation, immuables une fois postés
+  (`allow update/delete: if false`).
+
+**Sécurité** : `allow create` protégé par
+`!exists(clientPortals/{request.auth.uid})` (CP1, SECURITY_AUDIT.md —
+résiduel documenté, pas totalement fermable sans Admin SDK). Detail
+complet des règles et leur justification (get/list séparés, coût des
+`get()` mesuré empiriquement) directement en commentaire dans
+`firestore.rules`.
+
 ---
 
 ## 6. Features existantes
@@ -338,7 +377,11 @@ mais n'est appelé par aucune page/widget (voir SECURITY_AUDIT.md M2).
 - ✅ Connexion Google (OAuth)
 - ✅ Déconnexion
 - ✅ Réinitialisation mot de passe
-- ✅ `AuthWrapper` gère le routage auth/home automatiquement
+- ✅ `AuthWrapper` gère le routage non-authentifié/authentifié
+- ✅ **C-PORTAL.7** : un utilisateur authentifié n'atterrit plus
+  directement sur `HomePage` — `PostAuthRoleRouter` décide du rôle
+  (artisan/client/indéterminé) via `clientPortals/{uid}`, seul point de
+  décision de rôle de toute l'app
 
 ### Écrans / Pages
 | Page | Feature | Status |
@@ -348,7 +391,7 @@ mais n'est appelé par aucune page/widget (voir SECURITY_AUDIT.md M2).
 | HomePage | home | ✅ (dashboard KPIs + graphique CA 6 mois) |
 | ClientsListPage | clients | ✅ |
 | ClientFormPage | clients | ✅ |
-| ClientDetailPage | clients | ✅ (+ remise à zéro du solde — `showSettleAccountDialog`, sprint-3) |
+| ClientDetailPage | clients | ✅ (+ remise à zéro du solde — `showSettleAccountDialog`, sprint-3 ; + création/renvoi d'accès portail — `showCreatePortalDialog`, C-PORTAL.6) |
 | ProjectsListPage | projects | ✅ |
 | ProjectFormPage | projects | ✅ |
 | ProjectDetailPage | projects | ✅ |
@@ -364,6 +407,9 @@ mais n'est appelé par aucune page/widget (voir SECURITY_AUDIT.md M2).
 | PaymentDetailPage | payments | ✅ |
 | ReportsPage | reports | ✅ (filtres date/client/projet) |
 | SettingsPage | settings | ✅ (profil artisan + thème) |
+| ClientHomePage | client_portal | ✅ (C-PORTAL.7, minimal — accueil client, la liste de prestations depuis le miroir est une étape séparée à venir) |
+| ClientDisabledPage | client_portal | ✅ (C-PORTAL.7 — `enabled == false`, ton informatif, pas un échec) |
+| RoleCheckBlockedPage | client_portal | ✅ (C-PORTAL.7 — erreur non-réseau lors du routage de rôle, Réessayer + Se déconnecter) |
 
 ### Actions disponibles
 - CRUD complet : clients, projets, prestations, dépenses, paiements
@@ -393,6 +439,12 @@ routes: {
 Seules deux routes nommées. **Tout le reste navigue via `MaterialPageRoute` direct** depuis les widgets.
 
 **Conséquence** : pas de deep linking, pas de navigation déclarative, URLs web inutilisables en production.
+
+**C-PORTAL.7** : `AuthWrapper` ne route plus directement vers `HomePage`
+pour tout utilisateur authentifié — il délègue à `PostAuthRoleRouter`,
+seul point de décision de rôle (artisan/client/indéterminé) de toute
+l'app, avant de choisir entre `HomePage`, `ClientHomePage`,
+`ClientDisabledPage` ou `RoleCheckBlockedPage`.
 
 ---
 
@@ -462,6 +514,30 @@ F-SETTINGS.8). Détail complet dans `doc/F-SETTINGS_SPRINT_REPORT.md`.
 | F-SETTINGS M5 (rule) | Champ `updatedAt` (nouveau) non validé par les rules — un type invalide aurait arbitré un conflit de synchronisation dans le mauvais sens | `optionalString(request.resource.data, 'updatedAt', 40)` ajouté, testé sur l'émulateur avant/après (98/98) ✅ déployé |
 | F-SETTINGS (bug diagnostiqué en prod) | `updatedAt` gelé après le premier stamp reçu du cloud — l'arbitrage "le plus récent gagne" cessait de refléter la réalité après la première synchronisation | Stamp inconditionnel à chaque `saveSettings()`, un seul objet daté réutilisé pour le local et le cloud ✅ |
 | F-SETTINGS (course diagnostiquée) | La réconciliation de fond pouvait écraser une sauvegarde utilisateur plus récente, décidée sur un état local périmé | Relecture fraîche + revérification juste avant chaque écriture locale de la réconciliation — réduit la fenêtre, ne la ferme pas totalement (voir Résiduelle ci-dessous) ✅ |
+
+### Résolue en sprint C-PORTAL (2026-09-08)
+Sprint portail client, 7 étapes (C-PORTAL.1 à C-PORTAL.7). Détail
+complet dans `doc/C-PORTAL_SPRINT_REPORT.md`.
+
+| # | Problème | Fix |
+|---|---|---|
+| C-PORTAL (besoin initial) | L'artisan seul avait accès à l'app — aucun moyen pour un client de voir ses propres prestations | Espace `clientPortals/{portalUid}` séparé (miroir en lecture seule), routage de rôle au lancement, écrans minimaux (`ClientHomePage`/`ClientDisabledPage`) ✅ |
+| C-PORTAL CP1 (rule, sécurité) | `allow create` sur `clientPortals/{portalUid}` ne vérifiait pas quel uid pouvait revendiquer un rôle — un client portail pouvait planter le profil d'un artisan et devenir `isLinkedArtisan()` de sa victime | `!exists(clientPortals/{request.auth.uid})` ✅ déployé — résiduel documenté (SECURITY_AUDIT.md CP1) |
+| C-PORTAL (bug diagnostiqué en test terrain) | Le bloc `clientPortals` de `firestore.rules` était développé et testé (149/149) depuis plusieurs étapes mais n'avait jamais été déployé — la base ne contenait que la version pré-C-PORTAL | Déployé le 2026-09-08 après diff complet vérifié contre le dernier commit réellement en base ✅ |
+| C-PORTAL (bug diagnostiqué en test terrain) | `createPortal()` écrivait `createdAt` comme un `DateTime` Dart brut dans un `Map` à la main — le SDK le convertit en `Timestamp` Firestore, que `ClientPortal.fromJson` (qui attend une String ISO8601, comme `Client`/`WorkEntry`/tout le reste du repo) ne pouvait pas relire. Le `TypeError` résultant faisait router silencieusement le client vers l'espace artisan | Écriture via `ClientPortal(...).toJson()`, comme partout ailleurs dans le repo — plus jamais un `Map` écrit à la main pour cette collection ✅ |
+| C-PORTAL (conception révisée après le bug ci-dessus) | La règle de routage initiale ("tout sauf `permission-denied` → artisan") masquait aussi les erreurs de CODE (le `TypeError` ci-dessus), pas seulement les pannes réseau qu'elle visait | Seules les erreurs réseau identifiées (`unavailable`/`deadline-exceeded`/`cancelled`/`TimeoutException`) routent vers artisan ; tout le reste (`permission-denied`, `unauthenticated`, désérialisation, imprévu) bloque ✅ |
+
+**Leçon retenue du sprint** (pas une anecdote — un constat sur la
+stratégie de test) : les trois bugs réels trouvés ce sprint (rules
+`clientPortals` jamais déployées, `updatedAt` gelé en F-SETTINGS,
+`createdAt` en `Timestamp` ici) ont tous été trouvés par un parcours
+sur appareil réel — jamais par la suite automatisée, pourtant à plus
+de 400 tests au moment du dernier. Les trois se situent exactement à
+la frontière entre le code et Firebase réel (déploiement effectif des
+rules, sérialisation réelle contre le SDK Firestore) — une frontière
+que les fakes, par construction, ne peuvent pas couvrir puisqu'ils
+simulent le contrat qu'on croit correct, pas le comportement réel du
+service. Détail dans `doc/C-PORTAL_SPRINT_REPORT.md`.
 
 ### Résiduelle (connue, non bloquante)
 
@@ -705,6 +781,16 @@ Les fixes R-SEC.2 (M2/M3/M4/M5) et l'extension F-SETTINGS.8 (validation
 de `settings.updatedAt`) sont **déployés sur le projet Firebase
 `worklog-pro-2b3fb` et vérifiés sur appareil par William**.
 
+- **Bloc `clientPortals` (C-PORTAL)** : ✅ **déployé et vérifié sur
+  appareil le 2026-09-08** (parcours réel : création de portail,
+  connexion client → `ClientHomePage`, connexion artisan → `HomePage`
+  intacte). Inclut la garde CP1 (`!exists(clientPortals/{request.auth.uid})`)
+  — résiduel documenté (SECURITY_AUDIT.md CP1). 149/149 tests rules.
+- **I2 (App Check, Firestore)** : ✅ **confirmé actif** — pas par
+  vérification console, mais par l'échec réel d'une écriture web
+  pendant C-PORTAL.7 (voir SECURITY_AUDIT.md I2). A révélé une dette
+  distincte : le web n'a aucune branche debug App Check (§9 Dette).
+
 ### Storage rules
 ✅ présentes, deny-all par défaut, lecture/écriture limitées au propriétaire, limite 10MB, types MIME restreints images/PDF.
 
@@ -748,31 +834,39 @@ de `settings.updatedAt`) sont **déployés sur le projet Firebase
 | Firestore rules cohérentes | ✅ **Corrigées** (W-FIX1.1 + W-FIX1.6) |
 | `firstWhere` protégés | ✅ **Sécurisés** (W-FIX1.2) |
 | Dépendances nettoyées | ✅ **Allégé** (W-FIX1.5) |
-| Tests automatisés | ✅ **325 tests** (voir §9 Tests) — 0% → couverture ciblée sur deux sprints (R-SEC, F-SETTINGS) |
+| Tests automatisés | ✅ **401 tests unitaires/widgets** + suite rules (149) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur trois sprints (R-SEC, F-SETTINGS, C-PORTAL) |
 | Deep linking / navigation web | ❌ Navigator 1.0 basique |
 | `flutter analyze` | ✅ 0 erreur · 0 warning · **12 info** (dont 11 volontaires) |
-| Rules Firestore M2-M5 + F-SETTINGS.8 (SECURITY_AUDIT.md) | ✅ **Déployées et vérifiées sur appareil** (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
+| Rules Firestore M2-M5 + F-SETTINGS.8 + clientPortals (C-PORTAL) | ✅ **Déployées et vérifiées sur appareil** (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
 | Réglages artisan synchronisés cloud (F-SETTINGS) | ✅ `SyncingSettingsRepository`, local-first + réconciliation Firestore |
-| Build APK release | ✅ Réussi (F-SETTINGS.8, 2026-09-07) |
+| Portail client (C-PORTAL) | ✅ Provisioning, routage de rôle, miroir workEntries/expenses/commentaires en lecture seule — écrans minimaux, vraie liste de prestations en attente (étape séparée) |
+| Build APK release | ✅ Réussi (C-PORTAL.7, 2026-09-08) |
 
 ### Niveau de stabilité
 **Beta avancée / production-candidat** — Stable et sécurisé pour le
-déploiement Firebase Hosting / Play Store. Les rules R-SEC.2 et
-l'extension F-SETTINGS.8 sont déployées et vérifiées.
+déploiement Firebase Hosting / Play Store. Les rules R-SEC.2,
+l'extension F-SETTINGS.8 et le bloc `clientPortals` (C-PORTAL) sont
+déployés et vérifiés.
 
 Blocants restants avant prod réelle :
 - Navigation web non déclarative → URLs non partageables
-- Couverture de tests concentrée sur le chemin argent-critique et,
-  depuis F-SETTINGS, les réglages — les autres repositories/providers
-  Firestore et la plupart des pages restent à 0%
+- Couverture de tests concentrée sur le chemin argent-critique, les
+  réglages (F-SETTINGS) et le portail client (C-PORTAL) — les autres
+  repositories/providers Firestore et la plupart des pages restent à 0%
 - Résiduel F-SETTINGS non bloquant : controllers `SettingsPage` non
   resynchronisés après le premier build, fenêtre de course
   réconciliation/sauvegarde réduite mais non totalement fermée (voir §9
   et `doc/F-SETTINGS_SPRINT_REPORT.md`)
+- Résiduels C-PORTAL non bloquants (§9) : CP1 (squat d'uid par un
+  artisan, gain nul), un client mal routé pour raison réseau peut
+  écrire dans son propre espace vide, App Check web sans branche debug
+  (dette préexistante, découverte ce sprint) avec un code d'erreur non
+  mesuré sur lecture — voir `doc/C-PORTAL_SPRINT_REPORT.md`
 
 ### Prochaines étapes suggérées
-1. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
-2. **Étendre la couverture de tests** aux repositories restants (ex. `WorkEntryRepositoryImpl` contre l'émulateur Firestore) et aux pages à 0%.
-3. **Findings L1-L6 et I1-I5** (SECURITY_AUDIT.md) : décider s'ils méritent un futur sprint sécurité ou restent acceptés en l'état.
-4. **Sprint fonctionnel** : selon roadmap produit (ex: module Devis).
-5. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR.
+1. **Vraie liste de prestations dans `ClientHomePage`** depuis le miroir (étape C-PORTAL suivante, périmètre et preuve d'isolation déjà discutés avec William).
+2. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
+3. **Branche debug App Check pour le web** (§9 Dette) — décision de William, hors périmètre C-PORTAL.
+4. **Étendre la couverture de tests** aux repositories restants (ex. `WorkEntryRepositoryImpl` contre l'émulateur Firestore) et aux pages à 0%.
+5. **Findings L1-L6 et I1-I5** (SECURITY_AUDIT.md) : décider s'ils méritent un futur sprint sécurité ou restent acceptés en l'état.
+6. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR.
