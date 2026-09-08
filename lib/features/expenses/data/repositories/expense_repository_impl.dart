@@ -1,14 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:worklog_pro/features/client_portal/data/repositories/client_portal_repository_impl.dart';
+import 'package:worklog_pro/features/client_portal/domain/services/client_portal_mirror_service.dart';
+import 'package:worklog_pro/features/clients/data/repositories/client_repository_impl.dart';
 import 'package:worklog_pro/features/expenses/domain/entities/expense.dart';
 import 'package:worklog_pro/features/expenses/domain/repositories/expense_repository.dart';
 import 'package:worklog_pro/core/value_objects/date_only.dart';
 
-
 class ExpenseRepositoryImpl implements ExpenseRepository {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore;
   final String userId;
+  final ClientPortalMirrorService _mirror;
 
-  ExpenseRepositoryImpl(this.userId);
+  ExpenseRepositoryImpl(
+    this.userId, {
+    FirebaseFirestore? firestore,
+    ClientPortalMirrorService? mirror,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _mirror = mirror ??
+            ClientPortalMirrorService(
+              clientRepository: ClientRepositoryImpl(),
+              clientPortalRepository: ClientPortalRepositoryImpl(),
+            );
 
   CollectionReference<Map<String, dynamic>> _expensesCollection() {
     return _firestore
@@ -26,11 +38,22 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
       updatedAt: DateTime.now(),
     );
     await docRef.set(expenseWithId.toJson());
+    await _mirror.mirrorExpense(expenseWithId);
   }
 
   @override
   Future<void> deleteExpense(String id) async {
+    // Lu avant suppression : il faut clientId pour retrouver le portail
+    // éventuel à nettoyer. Pas de getExpense(id) dans l'interface publique
+    // (voir ExpenseRepository) : lecture directe, détail d'implémentation.
+    final existing = await _expensesCollection().doc(id).get();
+
     await _expensesCollection().doc(id).delete();
+
+    if (existing.exists) {
+      final clientId = existing.data()!['clientId'] as String;
+      await _mirror.removeMirroredExpense(clientId: clientId, expenseId: id);
+    }
   }
 
   @override
@@ -41,6 +64,7 @@ class ExpenseRepositoryImpl implements ExpenseRepository {
     await _expensesCollection()
         .doc(expense.id)
         .update(expenseToUpdate.toJson());
+    await _mirror.mirrorExpense(expenseToUpdate);
   }
 
   @override

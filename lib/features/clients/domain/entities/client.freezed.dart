@@ -38,6 +38,12 @@ mixin _$Client {
   /// Étiquettes pour filtrer ou rechercher plus facilement.
   List<String> get tags;
 
+  /// uid Firebase Auth du compte portail de ce client, si un accès lui a
+  /// été créé (C-PORTAL). Null = pas de portail. Sert de clé vers
+  /// clientPortals/{portalUid} — jamais l'inverse, ce document ne connaît
+  /// jamais son propre portail avant qu'on le lui attribue explicitement.
+  String? get portalUid;
+
   /// Date de création de la fiche.
   DateTime get createdAt;
 
@@ -68,6 +74,8 @@ mixin _$Client {
             (identical(other.defaultRates, defaultRates) ||
                 other.defaultRates == defaultRates) &&
             const DeepCollectionEquality().equals(other.tags, tags) &&
+            (identical(other.portalUid, portalUid) ||
+                other.portalUid == portalUid) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -86,12 +94,13 @@ mixin _$Client {
       notes,
       defaultRates,
       const DeepCollectionEquality().hash(tags),
+      portalUid,
       createdAt,
       updatedAt);
 
   @override
   String toString() {
-    return 'Client(id: $id, name: $name, type: $type, phone: $phone, email: $email, notes: $notes, defaultRates: $defaultRates, tags: $tags, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Client(id: $id, name: $name, type: $type, phone: $phone, email: $email, notes: $notes, defaultRates: $defaultRates, tags: $tags, portalUid: $portalUid, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 }
 
@@ -109,6 +118,7 @@ abstract mixin class $ClientCopyWith<$Res> {
       String? notes,
       DefaultRates defaultRates,
       List<String> tags,
+      String? portalUid,
       DateTime createdAt,
       DateTime updatedAt});
 
@@ -135,6 +145,7 @@ class _$ClientCopyWithImpl<$Res> implements $ClientCopyWith<$Res> {
     Object? notes = freezed,
     Object? defaultRates = null,
     Object? tags = null,
+    Object? portalUid = freezed,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -171,6 +182,10 @@ class _$ClientCopyWithImpl<$Res> implements $ClientCopyWith<$Res> {
           ? _self.tags
           : tags // ignore: cast_nullable_to_non_nullable
               as List<String>,
+      portalUid: freezed == portalUid
+          ? _self.portalUid
+          : portalUid // ignore: cast_nullable_to_non_nullable
+              as String?,
       createdAt: null == createdAt
           ? _self.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
@@ -295,6 +310,7 @@ extension ClientPatterns on Client {
             String? notes,
             DefaultRates defaultRates,
             List<String> tags,
+            String? portalUid,
             DateTime createdAt,
             DateTime updatedAt)?
         $default, {
@@ -312,6 +328,7 @@ extension ClientPatterns on Client {
             _that.notes,
             _that.defaultRates,
             _that.tags,
+            _that.portalUid,
             _that.createdAt,
             _that.updatedAt);
       case _:
@@ -343,6 +360,7 @@ extension ClientPatterns on Client {
             String? notes,
             DefaultRates defaultRates,
             List<String> tags,
+            String? portalUid,
             DateTime createdAt,
             DateTime updatedAt)
         $default,
@@ -359,6 +377,7 @@ extension ClientPatterns on Client {
             _that.notes,
             _that.defaultRates,
             _that.tags,
+            _that.portalUid,
             _that.createdAt,
             _that.updatedAt);
       case _:
@@ -389,6 +408,7 @@ extension ClientPatterns on Client {
             String? notes,
             DefaultRates defaultRates,
             List<String> tags,
+            String? portalUid,
             DateTime createdAt,
             DateTime updatedAt)?
         $default,
@@ -405,6 +425,7 @@ extension ClientPatterns on Client {
             _that.notes,
             _that.defaultRates,
             _that.tags,
+            _that.portalUid,
             _that.createdAt,
             _that.updatedAt);
       case _:
@@ -425,6 +446,7 @@ class _Client implements Client {
       this.notes,
       required this.defaultRates,
       final List<String> tags = const [],
+      this.portalUid,
       required this.createdAt,
       required this.updatedAt})
       : _tags = tags;
@@ -470,6 +492,13 @@ class _Client implements Client {
     return EqualUnmodifiableListView(_tags);
   }
 
+  /// uid Firebase Auth du compte portail de ce client, si un accès lui a
+  /// été créé (C-PORTAL). Null = pas de portail. Sert de clé vers
+  /// clientPortals/{portalUid} — jamais l'inverse, ce document ne connaît
+  /// jamais son propre portail avant qu'on le lui attribue explicitement.
+  @override
+  final String? portalUid;
+
   /// Date de création de la fiche.
   @override
   final DateTime createdAt;
@@ -507,6 +536,8 @@ class _Client implements Client {
             (identical(other.defaultRates, defaultRates) ||
                 other.defaultRates == defaultRates) &&
             const DeepCollectionEquality().equals(other._tags, _tags) &&
+            (identical(other.portalUid, portalUid) ||
+                other.portalUid == portalUid) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -525,12 +556,13 @@ class _Client implements Client {
       notes,
       defaultRates,
       const DeepCollectionEquality().hash(_tags),
+      portalUid,
       createdAt,
       updatedAt);
 
   @override
   String toString() {
-    return 'Client(id: $id, name: $name, type: $type, phone: $phone, email: $email, notes: $notes, defaultRates: $defaultRates, tags: $tags, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'Client(id: $id, name: $name, type: $type, phone: $phone, email: $email, notes: $notes, defaultRates: $defaultRates, tags: $tags, portalUid: $portalUid, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 }
 
@@ -549,6 +581,7 @@ abstract mixin class _$ClientCopyWith<$Res> implements $ClientCopyWith<$Res> {
       String? notes,
       DefaultRates defaultRates,
       List<String> tags,
+      String? portalUid,
       DateTime createdAt,
       DateTime updatedAt});
 
@@ -576,6 +609,7 @@ class __$ClientCopyWithImpl<$Res> implements _$ClientCopyWith<$Res> {
     Object? notes = freezed,
     Object? defaultRates = null,
     Object? tags = null,
+    Object? portalUid = freezed,
     Object? createdAt = null,
     Object? updatedAt = null,
   }) {
@@ -612,6 +646,10 @@ class __$ClientCopyWithImpl<$Res> implements _$ClientCopyWith<$Res> {
           ? _self._tags
           : tags // ignore: cast_nullable_to_non_nullable
               as List<String>,
+      portalUid: freezed == portalUid
+          ? _self.portalUid
+          : portalUid // ignore: cast_nullable_to_non_nullable
+              as String?,
       createdAt: null == createdAt
           ? _self.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable

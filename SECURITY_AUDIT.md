@@ -19,6 +19,28 @@
 > statut détaillé de M5 plus bas. L1-L6 et I1-I5 restent ouverts, non
 > traités par F-SETTINGS (hors périmètre — sprint de synchronisation
 > cloud des réglages, pas un sprint sécurité).
+>
+> **Mise à jour (sprint C-PORTAL, 2026-09-07)** — nouveau finding **CP1**
+> (Medium), trouvé et corrigé partiellement pendant la construction des
+> rules `clientPortals`, **rules non déployées**. Voir §1 pour le détail.
+>
+> **Clôture (sprint C-PORTAL, 2026-09-08)** — bloc `clientPortals`
+> (avec CP1) **déployé et vérifié sur appareil par William** (parcours
+> réel : création de portail, connexion client/artisan). **I2 confirmé
+> actif** pour Firestore — par l'échec réel d'une écriture, pas par la
+> console, voir I2. Aucun autre finding L1-L6/I1-I5 traité, hors
+> périmètre C-PORTAL — voir §7ter pour la clôture complète.
+
+---
+
+## 0bis. C-PORTAL — résumé
+
+| Sévérité | Nombre |
+|---|---|
+| Medium | 1 (CP1, fix partiel appliqué, **déployé** le 2026-09-08, résiduel documenté) |
+
+Voir aussi I2 (§3) : confirmé actif pour Firestore pendant ce sprint,
+et §7ter pour la clôture complète.
 
 ---
 
@@ -221,6 +243,95 @@ pour asserter le refus), puis fix, puis 98/98 après. **Déployé sur
 
 ---
 
+## 1bis. C-PORTAL — Medium
+
+### CP1 — `clientPortals/{portalUid}` : `create` permettait à quiconque de s'auto-désigner `artisanUid` sur un `portalUid` de son choix — usurpation de rôle et écriture dans le miroir d'une victime
+**Fichier** : `firestore.rules` (`match /clientPortals/{portalUid}`, bloc `allow create`)
+
+`allow create` ne vérifiait que `request.resource.data.artisanUid ==
+request.auth.uid` (l'auteur se déclare artisan de lui-même) et
+`isValidString(clientId, 100)` — rien n'empêchait de choisir n'importe
+quel `portalUid` (l'ID du document) indépendamment de qui l'écrit.
+`update` était déjà correctement verrouillé (`artisanUid` immuable,
+testé), mais `create` s'applique tant que le document n'existe pas
+encore — y compris sur l'uid d'un vrai artisan qui n'a **jamais** eu de
+portail, puisque son propre uid ne porte alors aucun document
+`clientPortals`.
+
+**Ce qu'un attaquant peut faire, vérifié empiriquement (pas supposé)** :
+1. Connaissant l'uid Firebase d'une victime (un artisan, ou n'importe
+   quel compte), créer `clientPortals/{uid_de_la_victime}` en
+   s'auto-désignant `artisanUid`. **Accepté** avant le fix — confirmé en
+   emulateur (`firestore-tests/rules.test.mjs`, tests marqués
+   "RÉSIDUEL DOCUMENTÉ").
+2. Le rôle applicatif (artisan vs client) étant déterminé uniquement
+   par l'existence de `clientPortals/{monUid}` (voir CONTEXT.md), la
+   victime bascule de rôle perçu à sa prochaine connexion — si c'était
+   un artisan sans portail, il ne peut alors plus atteindre son propre
+   écran d'accueil artisan. **Aucune rule `delete` n'existe sur ce
+   document, pas même pour son propriétaire** (`isOwner(portalUid)`
+   n'a jamais que `get`, jamais `delete`) — la victime elle-même ne
+   peut pas supprimer le document usurpateur. Verrouillage persistant,
+   non réversible depuis l'app, seule une intervention console Firebase
+   (accès projet, pas la victime) peut le défaire.
+3. L'attaquant devient simultanément `isLinkedArtisan(uid_de_la_victime)`
+   (la fonction ne fait que lire `artisanUid` sur ce document qu'il
+   vient de planter) et peut écrire dans
+   `clientPortals/{uid_de_la_victime}/workEntries/...` — confirmé
+   empiriquement, un faux document de prestation accepté dans ce
+   miroir usurpé.
+
+**Ce qu'il lui faut** : un compte authentifié quelconque (auto-inscrit,
+trivial) qui n'a **jamais** son propre `clientPortals/{lui-même}` —
+donc un autre artisan, ou un compte fraîchement créé sans lien
+portail — et connaître l'uid Firebase exact de la victime. Ce dernier
+point est la vraie barrière : l'uid n'est affiché nulle part dans
+l'app à un tiers non lié à ce compte ; il faudrait l'obtenir hors
+bande (capture d'écran, journal, ingénierie sociale, une fuite
+ailleurs). Un **client portail légitime connaît l'uid de son propre
+artisan** (il figure sur son propre profil, `clientPortals/{lui}.artisanUid`,
+lecture normale et nécessaire) — c'est le vecteur le plus réaliste,
+mais **fermé par le fix ci-dessous** : un client portail a par
+définition déjà son propre `clientPortals/{lui-même}`, donc bloqué.
+
+**Fix appliqué** : `!exists(/databases/$(database)/documents/clientPortals/$(request.auth.uid))`
+ajouté à `allow create` — quiconque a déjà son propre profil client
+portail ne peut plus en créer un autre, nulle part. Ferme le vecteur le
+plus réaliste (un client portail malveillant visant son propre
+artisan, dont il connaît légitimement l'uid). Testé empiriquement
+avant/après sur la suite complète (144 → 148 tests, aucune régression
+sur la création légitime d'un profil par un artisan pour un nouveau
+client).
+
+**Ce qui reste ouvert (résiduel, documenté, pas fermé)** : un compte
+qui n'est **pas déjà** client portail (typiquement un autre artisan,
+ou un compte tout juste créé) et qui connaît l'uid exact d'une cible
+peut toujours planter `clientPortals/{cette_cible}` — confirmé
+toujours accepté après le fix (tests "RÉSIDUEL DOCUMENTÉ"). **Non
+fermable par une rule seule** : il n'existe aucun moyen, côté rules,
+de vérifier qu'un compte est "légitimement" un artisan avant sa
+première création de portail — le rôle lui-même n'est défini que par
+l'absence de document `clientPortals`, une propriété qu'on ne peut pas
+transformer en condition positive sans un signal externe (un custom
+claim posé côté serveur, donc une Cloud Function avec Admin SDK —
+explicitement hors périmètre de ce sprint, voir la décision sur la
+création de compte). Documenté ici plutôt que laissé filer sans trace.
+
+**Sévérité — Medium, pas High** : l'impact (verrouillage de rôle
+persistant, non réversible sans accès console) est sérieux, mais la
+précondition (connaître l'uid Firebase exact d'une cible, un
+identifiant qui n'est exposé nulle part dans l'app à un tiers non lié)
+limite fortement l'exploitabilité pratique pour un attaquant
+extérieur. Le vecteur le plus réaliste (un client portail visant son
+propre artisan) est fermé par ce fix.
+
+**Statut : fix partiel déployé dans le repo, non déployé en prod
+(comme toutes les rules C-PORTAL). Résiduel accepté et documenté,
+pas de Cloud Function prévue pour le fermer complètement dans ce
+sprint.**
+
+---
+
 ## 2. Low
 
 > **Statut final (2026-09-06) : tous ouverts, non traités.** Le
@@ -321,6 +432,8 @@ secret — cf. §4), donc ce n'est pas une fuite, mais c'est un fichier
 > **Statut final (2026-09-06) : tous ouverts, non traités**, sauf I5
 > (déjà résolu, rien à faire). I2 et I3 attendent une réponse de
 > William (vérification console Firebase) plutôt qu'un fix de code.
+> **Mise à jour 2026-09-07 (C-PORTAL.7) : I2 confirmé** — voir la note
+> datée dans la section I2 ci-dessous.
 
 ### I1 — Storage : `contentType` fourni par le client, spoofable
 **Fichier** : `storage.rules:18-23`
@@ -346,6 +459,19 @@ tant que l'enforcement n'est pas activé dans la console Firebase**
 (Firestore/Storage → App Check → Enforce). Cette bascule ne se fait pas
 depuis le code — @William, peux-tu confirmer qu'elle est bien activée
 côté console pour ce projet (`worklog-pro-2b3fb`) ?
+
+**Confirmé le 2026-09-07 (C-PORTAL.7), par l'échec plutôt que par la
+console.** En testant la création de portail sur le build web (jamais
+testé sur web avant ce jour), `clientPortalRepository.createPortal()`
+a échoué systématiquement avec une erreur App Check
+(`appCheck/recaptcha-error` — la clé ReCAPTCHA v3 codée en dur dans
+`main.dart` ne vérifie pas pour `localhost`, faute de branche debug
+côté web, voir CONTEXT.md § Dette). L'écriture Firestore a été
+réellement rejetée, pas seulement un avertissement côté client — donc
+l'enforcement App Check est bien actif côté console pour Firestore.
+Ce n'est plus une hypothèse à vérifier : l'échec observé EST la
+preuve. Root cause du symptôme web = dette de code (pas de branche
+debug App Check pour le web), pas un problème d'enforcement.
 
 ### I3 — Réinitialisation de mot de passe : protection anti-énumération dépendante d'un réglage console
 **Fichier** : `lib/features/auth/data/repositories/auth_repository_impl.dart:132-141`,
@@ -463,8 +589,9 @@ trouvés en auditant le code réel plutôt que le document :
 ### Ce qui reste ouvert
 - **L1-L6, I1-I5** : non traités, hors périmètre de ce sprint (voir
   §2, §3).
-- **I2** : App Check — enforcement à confirmer côté console Firebase
-  (le client seul ne bloque rien).
+- **I2** : App Check — enforcement confirmé actif pour Firestore le
+  2026-09-07 (C-PORTAL.7, constaté par l'échec réel d'une écriture sur
+  web, pas par la console — voir §3).
 - **I3** : email enumeration protection — réglage Firebase Auth à
   vérifier côté console.
 - **I4** : dépendances Firebase quelques versions mineures en retard —
@@ -472,8 +599,9 @@ trouvés en auditant le code réel plutôt que le document :
 
 ### Actions qui revenaient à William (faites depuis, voir §7bis)
 1. ~~Déployer les rules~~ : fait avant le début du sprint F-SETTINGS.
-2. Vérifier/activer l'enforcement App Check en console (I2) — toujours
-   ouvert.
+2. ~~Vérifier/activer l'enforcement App Check en console (I2)~~ :
+   confirmé actif le 2026-09-07 par l'échec réel d'une écriture web
+   (C-PORTAL.7) — voir §3.
 3. Vérifier le réglage "Email Enumeration Protection" en console (I3) —
    toujours ouvert.
 4. Décider si L1-L6 méritent un futur sprint sécurité, ou restent
@@ -494,3 +622,36 @@ trouvés en auditant le code réel plutôt que le document :
 - **L1-L6, I1-I5 toujours ouverts** — F-SETTINGS était un sprint de
   synchronisation cloud, pas un sprint sécurité ; aucun de ces findings
   n'était dans son périmètre.
+
+## 7ter. Mise à jour post-clôture (sprint C-PORTAL, 2026-09-08)
+
+- **CP1 déployé** sur `worklog-pro-2b3fb` et **vérifié sur appareil par
+  William** — parcours réel complet (création de portail, connexion
+  client → `ClientHomePage`, connexion artisan → `HomePage` intacte
+  avec ses données). Résiduel documenté (§1bis) toujours ouvert, pas
+  fermable par une rule seule (voir l'argument détaillé).
+- **I2 confirmé actif** pour Firestore — pas par vérification console,
+  mais par l'échec réel d'une écriture (`createPortal()`) pendant le
+  test terrain du build web, App Check non contourné. Ce constat a lui
+  même révélé une dette distincte, non liée à I2 : le web n'a aucune
+  branche debug App Check (contrairement à Android,
+  `AndroidProvider.debug`), documentée dans `CONTEXT.md` § Dette
+  technique plutôt qu'ici — ce n'est pas un finding de sécurité, c'est
+  un défaut d'ergonomie de développement qui a caché un vrai problème
+  plus longtemps que nécessaire.
+- **Nouveau résiduel non-sécurité, documenté dans `CONTEXT.md`** : le
+  code qu'une rejection App Check produirait sur une **lecture**
+  Firestore (par opposition à l'écriture déjà observée) n'a jamais été
+  mesuré. `decideRoleRoute()` ne route vers artisan que sur un code
+  réseau précis (`unavailable`/`deadline-exceeded`/`cancelled`) — si
+  App Check rejetait un jour une lecture avec un code hors de cette
+  liste, un artisan légitime sur web se verrait bloqué. Pas mesuré, pas
+  corrigé, décision explicite de William de l'écrire plutôt que de le
+  laisser flottant.
+- **L1-L6, I1, I3-I5 toujours ouverts** — C-PORTAL était un sprint
+  fonctionnel (portail client), pas un sprint sécurité généraliste ;
+  seul CP1 (trouvé pendant ce sprint) et I2 (confirmé en cours de
+  route) étaient dans son périmètre effectif.
+
+Détail complet du sprint (les 7 étapes, la leçon sur la stratégie de
+test) dans `doc/C-PORTAL_SPRINT_REPORT.md`.

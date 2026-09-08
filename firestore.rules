@@ -296,5 +296,183 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
+
+    // ========================================
+    // CLIENT PORTAL (C-PORTAL) — espace miroir, clé = uid du client
+    // ========================================
+    //
+    // Arbre séparé de users/{userId}/..., jamais nesté sous l'artisan : la
+    // clé est l'uid du CLIENT (portalUid), pas celui de l'artisan. C'est ce
+    // qui rend la règle de lecture triviale (isOwner(portalUid), un seul
+    // niveau) — un client n'a jamais besoin de connaître l'uid de son
+    // artisan pour lire son propre espace.
+    //
+    // enabled (sur le profil) ne gate QUE le client, jamais l'artisan : le
+    // désactiver ne doit pas geler le mirroring en arrière-plan, sinon le
+    // réactiver plus tard afficherait des données périmées.
+    //
+    // Coût des get() dans les rules — vérifié empiriquement contre
+    // l'émulateur (rapport de couverture, pas une supposition) avant
+    // d'écrire ceci, PUIS corrigé après une première version fausse :
+    // une règle `list` qui référence resource.data ne peut PAS filtrer
+    // document par document — Firestore exige de prouver que TOUS les
+    // documents potentiels du résultat satisfont la règle, ou refuse la
+    // requête entière (confirmé : une règle `resource.data.x == true` sur
+    // un .get() non contraint par un .where() échoue intégralement,
+    // "Property x is undefined"). Une règle `list` qui n'utilise QUE
+    // get() (aucune référence à resource.data), en revanche, est évaluée
+    // UNE SEULE FOIS pour toute la requête, quel que soit le nombre de
+    // documents retournés (count: 1 sur 10 documents, count ≤ 2 sur 25
+    // avec la forme composée isOwner-style + get(), jamais un ×N).
+    // D'où : isPortalEnabled() ci-dessous, un get() vers le profil, utilisé
+    // aussi bien en lecture de liste qu'en écriture unitaire — pas de
+    // champ dénormalisé nulle part. Conséquence directe : désactiver un
+    // client redevient une écriture sur un seul document (enabled sur le
+    // profil), atomique par la garantie native de Firestore sur un
+    // document — aucune fenêtre de propagation partielle, puisqu'il n'y a
+    // plus rien à propager.
+
+    function isLinkedArtisan(portalUid) {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/clientPortals/$(portalUid)).data.artisanUid == request.auth.uid;
+    }
+
+    function isPortalEnabled(portalUid) {
+      return get(/databases/$(database)/documents/clientPortals/$(portalUid)).data.enabled == true;
+    }
+
+    match /clientPortals/{portalUid} {
+      // get et list séparés délibérément (allow read les aurait fusionnés
+      // sous UNE seule condition) : le client ne lit jamais qu'un document,
+      // le sien, jamais une liste — isOwner(portalUid) n'est donc jamais
+      // exposé à allow list. Sans cette séparation, un client portail qui
+      // tenterait un list() sur toute la collection pourrait espérer que
+      // la clause isOwner "passe" pour un document — en ne la posant que
+      // sur allow get, aucune règle list ne correspond jamais à son
+      // identité, la requête list est refusée net, filtrée ou non.
+      //
+      // Toujours lisible par son propre client via get(), même désactivé —
+      // sinon impossible d'afficher "accès désactivé" côté client.
+      allow get: if isOwner(portalUid);
+
+      // Artisan : liste ses propres portails (réparation d'un lien
+      // Client.portalUid manquant, voir ClientPortalReconciliationService).
+      // resource.data (pas un get()) car "m'appartient" varie par document
+      // au sein de cette collection — force une requête filtrée par
+      // where('artisanUid', '==', monUid), sans quoi Firestore refuse la
+      // requête entière plutôt que l'autoriser sans preuve (même mécanisme
+      // que isPortalEnabled(), vérifié empiriquement plus haut — mais cette
+      // fois le champ varie réellement par document, donc pas de raccourci
+      // par get() possible ici).
+      allow list: if isAuthenticated() && resource.data.artisanUid == request.auth.uid;
+
+      // !exists(clientPortals/moi) : défense en profondeur — un compte dont
+      // le PROPRE uid a déjà un profil client portail (donc identifié comme
+      // client par l'app, qui déduit le rôle de cette seule existence) ne
+      // peut créer AUCUN clientPortals, nulle part. Sans ça, un client
+      // portail pouvait planter clientPortals/{uid_de_son_choix} en
+      // s'auto-désignant artisanUid — basculant le rôle perçu de la
+      // victime (si son uid n'avait jamais eu ce document) ET devenant
+      // isLinkedArtisan() de cette victime, avec écriture dans son miroir
+      // (les deux vérifiés empiriquement avant ce fix, pas supposés).
+      //
+      // Ne protège QUE contre un attaquant qui est lui-même déjà un client
+      // portail. Un compte artisan quelconque peut toujours squatter l'uid
+      // d'une victime qu'il connaît, puisque son propre uid n'a jamais de
+      // clientPortals/{soi-même} par construction — cette limite résiduelle
+      // est documentée dans SECURITY_AUDIT.md, pas fermable sans Admin SDK
+      // pour vérifier un vrai rôle serveur.
+      allow create: if isAuthenticated()
+        && !exists(/databases/$(database)/documents/clientPortals/$(request.auth.uid))
+        && request.resource.data.artisanUid == request.auth.uid
+        && isValidString(request.resource.data.clientId, 100)
+        && request.resource.data.enabled is bool
+        && ('createdAt' in request.resource.data);
+
+      // Artisan : peut tout changer (notamment enabled) sauf l'identité du lien.
+      allow update: if isLinkedArtisan(portalUid)
+        && request.resource.data.artisanUid == resource.data.artisanUid
+        && request.resource.data.clientId == resource.data.clientId;
+
+      // Client : ne peut modifier aucun des quatre champs porteurs
+      // d'identité/permission, quels que soient les autres champs touchés
+      // dans la même écriture — comparaison à la valeur STOCKÉE, pas à une
+      // constante, donc un update qui repasse enabled à sa valeur actuelle
+      // en changeant autre chose passe ; toute tentative de le faire
+      // varier échoue, noyée dans un update multi-champs ou non.
+      allow update: if isOwner(portalUid)
+        && request.resource.data.enabled == resource.data.enabled
+        && request.resource.data.artisanUid == resource.data.artisanUid
+        && request.resource.data.clientId == resource.data.clientId
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /clientPortals/{portalUid}/workEntries/{entryId} {
+      // get() unique par requête (voir note en tête de section) : pas de
+      // champ dénormalisé, enabled reste sur le seul profil.
+      allow read: if isOwner(portalUid) && isPortalEnabled(portalUid);
+
+      // Écriture exclusivement par l'artisan lié — miroir en lecture seule
+      // pour le client. Pas de condition sur enabled ici : le mirroring
+      // continue même désactivé (voir note en tête de section).
+      allow create: if isLinkedArtisan(portalUid)
+        && isValidString(request.resource.data.date, 10)
+        && isPositiveInt(request.resource.data.laborAmountHT)
+        && request.resource.data.billingMode in ['hourly', 'half_day', 'day', 'fixed_job']
+        && hasTimestamps(request.resource.data);
+
+      allow update: if isLinkedArtisan(portalUid)
+        && isValidString(request.resource.data.date, 10)
+        && isPositiveInt(request.resource.data.laborAmountHT)
+        && request.resource.data.billingMode in ['hourly', 'half_day', 'day', 'fixed_job']
+        && hasTimestamps(request.resource.data)
+        && createdAtUnchanged();
+
+      allow delete: if isLinkedArtisan(portalUid);
+    }
+
+    match /clientPortals/{portalUid}/expenses/{expenseId} {
+      allow read: if isOwner(portalUid) && isPortalEnabled(portalUid);
+
+      // isBillable == true est réaffirmé ici (pas seulement dans
+      // ClientPortalMirrorService côté Dart) : une dépense non refacturable
+      // ne doit jamais apparaître dans le miroir, garanti même si la
+      // logique applicative a un bug — R01, les rôles/garanties se
+      // vérifient côté rules, pas uniquement côté app.
+      allow create: if isLinkedArtisan(portalUid)
+        && isValidString(request.resource.data.date, 10)
+        && isPositiveInt(request.resource.data.amountHT)
+        && isValidString(request.resource.data.description, 500)
+        && request.resource.data.isBillable == true
+        && hasTimestamps(request.resource.data);
+
+      allow update: if isLinkedArtisan(portalUid)
+        && isValidString(request.resource.data.date, 10)
+        && isPositiveInt(request.resource.data.amountHT)
+        && isValidString(request.resource.data.description, 500)
+        && request.resource.data.isBillable == true
+        && hasTimestamps(request.resource.data)
+        && createdAtUnchanged();
+
+      allow delete: if isLinkedArtisan(portalUid);
+    }
+
+    match /clientPortals/{portalUid}/workEntries/{entryId}/portalComments/{commentId} {
+      // Nom "portalComments" (pas "comments") : évite qu'une future règle
+      // collection-group générique sur un nom trop commun ne s'applique
+      // par accident à cette sous-collection, ou l'inverse.
+      allow read: if (isOwner(portalUid) && isPortalEnabled(portalUid)) || isLinkedArtisan(portalUid);
+
+      allow create: if isOwner(portalUid)
+        && isPortalEnabled(portalUid)
+        && isValidString(request.resource.data.text, 2000)
+        && ('createdAt' in request.resource.data);
+
+      // Immuables une fois postés — M2 (SECURITY_AUDIT.md) : update ET
+      // delete bloqués ensemble, sinon delete+recreate contourne
+      // l'immuabilité exactement comme sur client_settlements.
+      allow update: if false;
+      allow delete: if false;
+    }
   }
 }
