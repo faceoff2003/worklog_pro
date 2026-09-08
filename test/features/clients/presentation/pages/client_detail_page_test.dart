@@ -120,6 +120,13 @@ class _UnusedClientPortalRepository implements ClientPortalRepository {
     if (throwOnGetBackfillStatus != null) throw throwOnGetBackfillStatus!;
     return backfillStatusToReturn;
   }
+
+  DateTime? lastUpdatedSettlementPivot;
+
+  @override
+  Future<void> updateSettlementPivot(String portalUid, DateTime settlementCreatedAt) async {
+    lastUpdatedSettlementPivot = settlementCreatedAt;
+  }
 }
 
 class _FakeWorkEntryRepository implements WorkEntryRepository {

@@ -12,6 +12,7 @@ import 'package:worklog_pro/core/value_objects/value_objects.dart';
 import 'package:worklog_pro/features/client_portal/domain/entities/client_portal.dart';
 import 'package:worklog_pro/features/client_portal/domain/services/client_portal_mirror_service.dart';
 import 'package:worklog_pro/features/clients/domain/entities/client.dart';
+import 'package:worklog_pro/features/clients/domain/entities/client_settlement.dart';
 import 'package:worklog_pro/features/clients/domain/repositories/client_repository.dart';
 import 'package:worklog_pro/features/client_portal/domain/repositories/client_portal_repository.dart';
 import 'package:worklog_pro/features/expenses/domain/entities/expense.dart';
@@ -63,6 +64,11 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   int deleteMirroredExpenseCallCount = 0;
   String? lastDeletedExpenseId;
 
+  Object? throwOnUpdateSettlementPivot;
+  int updateSettlementPivotCallCount = 0;
+  String? lastSettlementPivotPortalUid;
+  DateTime? lastSettlementPivotCreatedAt;
+
   @override
   Future<void> mirrorWorkEntry(String portalUid, WorkEntry entry) async {
     if (throwOnMirrorWorkEntry != null) throw throwOnMirrorWorkEntry!;
@@ -108,6 +114,14 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) => throw UnimplementedError();
   @override
   Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid) => throw UnimplementedError();
+
+  @override
+  Future<void> updateSettlementPivot(String portalUid, DateTime settlementCreatedAt) async {
+    if (throwOnUpdateSettlementPivot != null) throw throwOnUpdateSettlementPivot!;
+    updateSettlementPivotCallCount++;
+    lastSettlementPivotPortalUid = portalUid;
+    lastSettlementPivotCreatedAt = settlementCreatedAt;
+  }
 }
 
 Client _client({required String id, String? portalUid}) => Client(
@@ -133,6 +147,14 @@ WorkEntry _workEntry({required String id, required String clientId, int laborCen
       laborAmountHT: Money.fromCents(laborCents),
       createdAt: DateTime(2026, 1, 1),
       updatedAt: DateTime(2026, 1, 1),
+    );
+
+ClientSettlement _settlement({required String clientId, DateTime? createdAt}) => ClientSettlement(
+      id: 'settlement-1',
+      clientId: clientId,
+      date: DateOnly.today(),
+      balanceAtSettlement: Money.fromCents(0),
+      createdAt: createdAt ?? DateTime(2026, 6, 1, 10, 30),
     );
 
 Expense _expense({required String id, required String clientId, required bool isBillable}) => Expense(
@@ -248,6 +270,50 @@ void main() {
 
       expect(portalRepository.deleteMirroredExpenseCallCount, 0);
     });
+  });
+
+  group('mirrorSettlementPivot (C-PORTAL.10) — pivot archives/en cours', () {
+    test('client avec un portail lié → updateSettlementPivot appelé avec createdAt, PAS date', () async {
+      clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: 'portal-1');
+      final createdAt = DateTime(2026, 6, 1, 10, 30);
+      final settlement = _settlement(clientId: 'client-1', createdAt: createdAt);
+
+      await service.mirrorSettlementPivot(settlement);
+
+      expect(portalRepository.updateSettlementPivotCallCount, 1);
+      expect(portalRepository.lastSettlementPivotPortalUid, 'portal-1');
+      expect(
+        portalRepository.lastSettlementPivotCreatedAt,
+        createdAt,
+        reason: 'le split doit se faire sur createdAt, comme clientBalanceProvider côté artisan — jamais sur date',
+      );
+    });
+
+    test('client sans portail (portalUid null) → jamais transmis', () async {
+      clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: null);
+
+      await service.mirrorSettlementPivot(_settlement(clientId: 'client-1'));
+
+      expect(portalRepository.updateSettlementPivotCallCount, 0);
+    });
+
+    test('client introuvable → jamais transmis, aucune exception', () async {
+      await service.mirrorSettlementPivot(_settlement(clientId: 'client-inconnu'));
+
+      expect(portalRepository.updateSettlementPivotCallCount, 0);
+    });
+
+    test(
+      'le repository échoue → le service ne relance pas l\'exception (best-effort, ne doit jamais faire '
+      'échouer le solde de compte lui-même)',
+      () async {
+        clientRepository.clients['client-1'] = _client(id: 'client-1', portalUid: 'portal-1');
+        portalRepository.throwOnUpdateSettlementPivot = Exception('réseau indisponible');
+
+        await service.mirrorSettlementPivot(_settlement(clientId: 'client-1'));
+        // Si on arrive ici sans exception, le best-effort est respecté.
+      },
+    );
   });
 
   group('best-effort — jamais bloquant', () {

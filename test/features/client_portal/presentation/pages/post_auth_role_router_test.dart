@@ -72,6 +72,8 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) => throw UnimplementedError();
   @override
   Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid) => throw UnimplementedError();
+  @override
+  Future<void> updateSettlementPivot(String portalUid, DateTime settlementCreatedAt) => throw UnimplementedError();
 }
 
 ClientPortal _portal({required bool enabled}) => ClientPortal(

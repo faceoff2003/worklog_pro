@@ -128,6 +128,18 @@ class ClientPortalRepositoryImpl implements ClientPortalRepository {
       mirroredExpenses: data['backfillExpensesMirrored'] as int,
     );
   }
+
+  @override
+  Future<void> updateSettlementPivot(String portalUid, DateTime settlementCreatedAt) async {
+    // .toIso8601String() explicite, jamais le DateTime brut dans ce Map :
+    // le SDK le convertirait en Timestamp Firestore, que ClientPortal.
+    // fromJson() (String ISO8601, comme createdAt) ne saurait pas relire.
+    // C'est exactement le bug déjà rencontré sur createdAt le 2026-09-08
+    // (voir client_portal_round_trip_test.dart) — ne pas le reproduire ici.
+    await _portalDoc(portalUid).update({
+      'lastSettlementCreatedAt': settlementCreatedAt.toIso8601String(),
+    });
+  }
 }
 
 /// Champs volontairement exclus du miroir WorkEntry : notes ("détails

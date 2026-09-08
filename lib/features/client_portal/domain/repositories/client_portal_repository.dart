@@ -64,6 +64,13 @@ abstract class ClientPortalRepository {
   /// d'écrire ce commentaire, pas supposé : un artisan non lié obtient un
   /// résultat vide, jamais une erreur.
   Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid);
+
+  /// Pivot du split archives/en cours (C-PORTAL.10) — voir la note sur
+  /// ClientPortal.lastSettlementCreatedAt pour pourquoi c'est TOUJOURS
+  /// ClientSettlement.createdAt qui est passé ici, jamais .date. Écrit
+  /// best-effort par ClientPortalMirrorService après chaque solde de
+  /// compte — jamais bloquant pour le solde lui-même en cas d'échec.
+  Future<void> updateSettlementPivot(String portalUid, DateTime settlementCreatedAt);
 }
 
 /// Compteurs séparés par collection — jamais agrégés. Un artisan doit

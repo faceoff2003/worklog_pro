@@ -39,6 +39,24 @@ abstract class ClientPortal with _$ClientPortal {
     String? displayName,
 
     required DateTime createdAt,
+
+    /// Pivot du split "Archives" / "En cours" côté client (C-PORTAL.10).
+    /// C'est TOUJOURS ClientSettlement.createdAt qui est stocké ici, JAMAIS
+    /// ClientSettlement.date — parce que clientBalanceProvider (le calcul
+    /// de balance de l'artisan) filtre déjà ses propres prestations/dépenses
+    /// sur `createdAt.isAfter(cutoff)`, pas sur `date` (voir
+    /// client_balance_providers.dart). Si le split ici se faisait sur
+    /// `date`, le client et l'artisan calculeraient deux soldes différents
+    /// sur le même compte pour les mêmes prestations — pire qu'un cas
+    /// limite, une contradiction visible. Limite connue, partagée avec le
+    /// calcul de l'artisan (pas propre au portail) : une prestation dont la
+    /// date de travaux précède le solde mais saisie APRÈS compte comme "en
+    /// cours", pas "archivée" — si ce critère doit changer, il doit changer
+    /// des deux côtés à la fois, jamais ici seul.
+    ///
+    /// null = aucun solde de compte n'a jamais été enregistré pour ce
+    /// client ; tout est "en cours".
+    DateTime? lastSettlementCreatedAt,
   }) = _ClientPortal;
 
   factory ClientPortal.fromJson(Map<String, dynamic> json) => _$ClientPortalFromJson(json);

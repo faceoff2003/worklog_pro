@@ -109,6 +109,8 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
 
   @override
   Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid) => throw UnimplementedError();
+  @override
+  Future<void> updateSettlementPivot(String portalUid, DateTime settlementCreatedAt) => throw UnimplementedError();
 }
 
 class _FakeWorkEntryRepository implements WorkEntryRepository {

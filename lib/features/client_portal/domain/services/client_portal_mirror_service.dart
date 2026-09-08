@@ -1,6 +1,7 @@
 import 'dart:developer' as dev;
 
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:worklog_pro/features/clients/domain/entities/client_settlement.dart';
 import 'package:worklog_pro/features/clients/domain/repositories/client_repository.dart';
 import 'package:worklog_pro/features/client_portal/domain/repositories/client_portal_repository.dart';
 import 'package:worklog_pro/features/expenses/domain/entities/expense.dart';
@@ -84,6 +85,18 @@ class ClientPortalMirrorService {
           await _clientPortalRepository.deleteMirroredExpense(portalUid, expenseId);
         },
       );
+
+  /// Best-effort comme mirrorWorkEntry/mirrorExpense : un échec ne doit
+  /// jamais faire échouer le solde de compte lui-même (SettlementRepository
+  /// Impl l'appelle APRÈS son écriture réelle). Le pire cas d'un échec est
+  /// un pivot pas à jour côté portail (C-PORTAL.10) — visible et réparable
+  /// depuis ClientDetailPage ("Reprendre l'historique"), jamais silencieux
+  /// au point de rester invisible.
+  Future<void> mirrorSettlementPivot(ClientSettlement settlement) => _guardedAdd(() async {
+        final portalUid = await _portalUidFor(settlement.clientId);
+        if (portalUid == null) return;
+        await _clientPortalRepository.updateSettlementPivot(portalUid, settlement.createdAt);
+      });
 
   Future<String?> _portalUidFor(String clientId) async {
     final client = await _clientRepository.getClient(clientId);

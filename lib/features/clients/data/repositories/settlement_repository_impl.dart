@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:worklog_pro/features/client_portal/data/repositories/client_portal_repository_impl.dart';
+import 'package:worklog_pro/features/client_portal/domain/services/client_portal_mirror_service.dart';
+import 'package:worklog_pro/features/clients/data/repositories/client_repository_impl.dart';
 import 'package:worklog_pro/features/clients/domain/entities/client_settlement.dart';
 import 'package:worklog_pro/features/clients/domain/repositories/settlement_repository.dart';
 
@@ -10,12 +13,19 @@ import 'package:worklog_pro/features/clients/domain/repositories/settlement_repo
 class SettlementRepositoryImpl implements SettlementRepository {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
+  final ClientPortalMirrorService _mirror;
 
   SettlementRepositoryImpl({
     FirebaseFirestore? firestore,
     FirebaseAuth? auth,
+    ClientPortalMirrorService? mirror,
   })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+        _auth = auth ?? FirebaseAuth.instance,
+        _mirror = mirror ??
+            ClientPortalMirrorService(
+              clientRepository: ClientRepositoryImpl(),
+              clientPortalRepository: ClientPortalRepositoryImpl(),
+            );
 
   String get _userId {
     final uid = _auth.currentUser?.uid;
@@ -69,6 +79,10 @@ class SettlementRepositoryImpl implements SettlementRepository {
   @override
   Future<void> createSettlement(ClientSettlement settlement) async {
     await _collection().doc(settlement.id).set(settlement.toJson());
+    // Best-effort, après l'écriture réelle : un échec ici ne doit jamais
+    // faire échouer le solde de compte lui-même (voir ClientPortalMirror
+    // Service.mirrorSettlementPivot).
+    await _mirror.mirrorSettlementPivot(settlement);
   }
 
   @override

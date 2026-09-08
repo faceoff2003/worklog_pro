@@ -32,6 +32,24 @@ mixin _$ClientPortal {
   String? get displayName;
   DateTime get createdAt;
 
+  /// Pivot du split "Archives" / "En cours" côté client (C-PORTAL.10).
+  /// C'est TOUJOURS ClientSettlement.createdAt qui est stocké ici, JAMAIS
+  /// ClientSettlement.date — parce que clientBalanceProvider (le calcul
+  /// de balance de l'artisan) filtre déjà ses propres prestations/dépenses
+  /// sur `createdAt.isAfter(cutoff)`, pas sur `date` (voir
+  /// client_balance_providers.dart). Si le split ici se faisait sur
+  /// `date`, le client et l'artisan calculeraient deux soldes différents
+  /// sur le même compte pour les mêmes prestations — pire qu'un cas
+  /// limite, une contradiction visible. Limite connue, partagée avec le
+  /// calcul de l'artisan (pas propre au portail) : une prestation dont la
+  /// date de travaux précède le solde mais saisie APRÈS compte comme "en
+  /// cours", pas "archivée" — si ce critère doit changer, il doit changer
+  /// des deux côtés à la fois, jamais ici seul.
+  ///
+  /// null = aucun solde de compte n'a jamais été enregistré pour ce
+  /// client ; tout est "en cours".
+  DateTime? get lastSettlementCreatedAt;
+
   /// Create a copy of ClientPortal
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -58,17 +76,20 @@ mixin _$ClientPortal {
             (identical(other.displayName, displayName) ||
                 other.displayName == displayName) &&
             (identical(other.createdAt, createdAt) ||
-                other.createdAt == createdAt));
+                other.createdAt == createdAt) &&
+            (identical(
+                    other.lastSettlementCreatedAt, lastSettlementCreatedAt) ||
+                other.lastSettlementCreatedAt == lastSettlementCreatedAt));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, portalUid, artisanUid, clientId,
-      enabled, displayName, createdAt);
+      enabled, displayName, createdAt, lastSettlementCreatedAt);
 
   @override
   String toString() {
-    return 'ClientPortal(portalUid: $portalUid, artisanUid: $artisanUid, clientId: $clientId, enabled: $enabled, displayName: $displayName, createdAt: $createdAt)';
+    return 'ClientPortal(portalUid: $portalUid, artisanUid: $artisanUid, clientId: $clientId, enabled: $enabled, displayName: $displayName, createdAt: $createdAt, lastSettlementCreatedAt: $lastSettlementCreatedAt)';
   }
 }
 
@@ -84,7 +105,8 @@ abstract mixin class $ClientPortalCopyWith<$Res> {
       String clientId,
       bool enabled,
       String? displayName,
-      DateTime createdAt});
+      DateTime createdAt,
+      DateTime? lastSettlementCreatedAt});
 }
 
 /// @nodoc
@@ -105,6 +127,7 @@ class _$ClientPortalCopyWithImpl<$Res> implements $ClientPortalCopyWith<$Res> {
     Object? enabled = null,
     Object? displayName = freezed,
     Object? createdAt = null,
+    Object? lastSettlementCreatedAt = freezed,
   }) {
     return _then(_self.copyWith(
       portalUid: null == portalUid
@@ -131,6 +154,10 @@ class _$ClientPortalCopyWithImpl<$Res> implements $ClientPortalCopyWith<$Res> {
           ? _self.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      lastSettlementCreatedAt: freezed == lastSettlementCreatedAt
+          ? _self.lastSettlementCreatedAt
+          : lastSettlementCreatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ));
   }
 }
@@ -228,16 +255,28 @@ extension ClientPortalPatterns on ClientPortal {
 
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
-    TResult Function(String portalUid, String artisanUid, String clientId,
-            bool enabled, String? displayName, DateTime createdAt)?
+    TResult Function(
+            String portalUid,
+            String artisanUid,
+            String clientId,
+            bool enabled,
+            String? displayName,
+            DateTime createdAt,
+            DateTime? lastSettlementCreatedAt)?
         $default, {
     required TResult orElse(),
   }) {
     final _that = this;
     switch (_that) {
       case _ClientPortal() when $default != null:
-        return $default(_that.portalUid, _that.artisanUid, _that.clientId,
-            _that.enabled, _that.displayName, _that.createdAt);
+        return $default(
+            _that.portalUid,
+            _that.artisanUid,
+            _that.clientId,
+            _that.enabled,
+            _that.displayName,
+            _that.createdAt,
+            _that.lastSettlementCreatedAt);
       case _:
         return orElse();
     }
@@ -258,15 +297,27 @@ extension ClientPortalPatterns on ClientPortal {
 
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
-    TResult Function(String portalUid, String artisanUid, String clientId,
-            bool enabled, String? displayName, DateTime createdAt)
+    TResult Function(
+            String portalUid,
+            String artisanUid,
+            String clientId,
+            bool enabled,
+            String? displayName,
+            DateTime createdAt,
+            DateTime? lastSettlementCreatedAt)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _ClientPortal():
-        return $default(_that.portalUid, _that.artisanUid, _that.clientId,
-            _that.enabled, _that.displayName, _that.createdAt);
+        return $default(
+            _that.portalUid,
+            _that.artisanUid,
+            _that.clientId,
+            _that.enabled,
+            _that.displayName,
+            _that.createdAt,
+            _that.lastSettlementCreatedAt);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -286,15 +337,27 @@ extension ClientPortalPatterns on ClientPortal {
 
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
-    TResult? Function(String portalUid, String artisanUid, String clientId,
-            bool enabled, String? displayName, DateTime createdAt)?
+    TResult? Function(
+            String portalUid,
+            String artisanUid,
+            String clientId,
+            bool enabled,
+            String? displayName,
+            DateTime createdAt,
+            DateTime? lastSettlementCreatedAt)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _ClientPortal() when $default != null:
-        return $default(_that.portalUid, _that.artisanUid, _that.clientId,
-            _that.enabled, _that.displayName, _that.createdAt);
+        return $default(
+            _that.portalUid,
+            _that.artisanUid,
+            _that.clientId,
+            _that.enabled,
+            _that.displayName,
+            _that.createdAt,
+            _that.lastSettlementCreatedAt);
       case _:
         return null;
     }
@@ -310,7 +373,8 @@ class _ClientPortal implements ClientPortal {
       required this.clientId,
       required this.enabled,
       this.displayName,
-      required this.createdAt});
+      required this.createdAt,
+      this.lastSettlementCreatedAt});
   factory _ClientPortal.fromJson(Map<String, dynamic> json) =>
       _$ClientPortalFromJson(json);
 
@@ -337,6 +401,25 @@ class _ClientPortal implements ClientPortal {
   final String? displayName;
   @override
   final DateTime createdAt;
+
+  /// Pivot du split "Archives" / "En cours" côté client (C-PORTAL.10).
+  /// C'est TOUJOURS ClientSettlement.createdAt qui est stocké ici, JAMAIS
+  /// ClientSettlement.date — parce que clientBalanceProvider (le calcul
+  /// de balance de l'artisan) filtre déjà ses propres prestations/dépenses
+  /// sur `createdAt.isAfter(cutoff)`, pas sur `date` (voir
+  /// client_balance_providers.dart). Si le split ici se faisait sur
+  /// `date`, le client et l'artisan calculeraient deux soldes différents
+  /// sur le même compte pour les mêmes prestations — pire qu'un cas
+  /// limite, une contradiction visible. Limite connue, partagée avec le
+  /// calcul de l'artisan (pas propre au portail) : une prestation dont la
+  /// date de travaux précède le solde mais saisie APRÈS compte comme "en
+  /// cours", pas "archivée" — si ce critère doit changer, il doit changer
+  /// des deux côtés à la fois, jamais ici seul.
+  ///
+  /// null = aucun solde de compte n'a jamais été enregistré pour ce
+  /// client ; tout est "en cours".
+  @override
+  final DateTime? lastSettlementCreatedAt;
 
   /// Create a copy of ClientPortal
   /// with the given fields replaced by the non-null parameter values.
@@ -368,17 +451,20 @@ class _ClientPortal implements ClientPortal {
             (identical(other.displayName, displayName) ||
                 other.displayName == displayName) &&
             (identical(other.createdAt, createdAt) ||
-                other.createdAt == createdAt));
+                other.createdAt == createdAt) &&
+            (identical(
+                    other.lastSettlementCreatedAt, lastSettlementCreatedAt) ||
+                other.lastSettlementCreatedAt == lastSettlementCreatedAt));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, portalUid, artisanUid, clientId,
-      enabled, displayName, createdAt);
+      enabled, displayName, createdAt, lastSettlementCreatedAt);
 
   @override
   String toString() {
-    return 'ClientPortal(portalUid: $portalUid, artisanUid: $artisanUid, clientId: $clientId, enabled: $enabled, displayName: $displayName, createdAt: $createdAt)';
+    return 'ClientPortal(portalUid: $portalUid, artisanUid: $artisanUid, clientId: $clientId, enabled: $enabled, displayName: $displayName, createdAt: $createdAt, lastSettlementCreatedAt: $lastSettlementCreatedAt)';
   }
 }
 
@@ -396,7 +482,8 @@ abstract mixin class _$ClientPortalCopyWith<$Res>
       String clientId,
       bool enabled,
       String? displayName,
-      DateTime createdAt});
+      DateTime createdAt,
+      DateTime? lastSettlementCreatedAt});
 }
 
 /// @nodoc
@@ -418,6 +505,7 @@ class __$ClientPortalCopyWithImpl<$Res>
     Object? enabled = null,
     Object? displayName = freezed,
     Object? createdAt = null,
+    Object? lastSettlementCreatedAt = freezed,
   }) {
     return _then(_ClientPortal(
       portalUid: null == portalUid
@@ -444,6 +532,10 @@ class __$ClientPortalCopyWithImpl<$Res>
           ? _self.createdAt
           : createdAt // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      lastSettlementCreatedAt: freezed == lastSettlementCreatedAt
+          ? _self.lastSettlementCreatedAt
+          : lastSettlementCreatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime?,
     ));
   }
 }

@@ -14,6 +14,9 @@ _ClientPortal _$ClientPortalFromJson(Map<String, dynamic> json) =>
       enabled: json['enabled'] as bool,
       displayName: json['displayName'] as String?,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      lastSettlementCreatedAt: json['lastSettlementCreatedAt'] == null
+          ? null
+          : DateTime.parse(json['lastSettlementCreatedAt'] as String),
     );
 
 Map<String, dynamic> _$ClientPortalToJson(_ClientPortal instance) =>
@@ -24,4 +27,6 @@ Map<String, dynamic> _$ClientPortalToJson(_ClientPortal instance) =>
       'enabled': instance.enabled,
       'displayName': instance.displayName,
       'createdAt': instance.createdAt.toIso8601String(),
+      'lastSettlementCreatedAt':
+          instance.lastSettlementCreatedAt?.toIso8601String(),
     };
