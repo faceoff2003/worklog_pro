@@ -54,7 +54,16 @@ abstract class ClientPortalRepository {
   /// l'artisan lié (règle déjà en place sur le profil), immuable côté
   /// client (voir firestore.rules).
   Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome);
-  Future<BackfillOutcome?> getBackfillStatus(String portalUid);
+
+  /// artisanUid requis : allow get sur clientPortals/{portalUid} exige
+  /// isOwner(portalUid) (le CLIENT), jamais isLinkedArtisan — un artisan ne
+  /// peut jamais get() un profil directement, seulement list() filtré par
+  /// son propre artisanUid (voir listPortalsForArtisan ci-dessus). Cette
+  /// méthode réutilise donc EXACTEMENT la même requête filtrée plutôt que
+  /// d'ouvrir une nouvelle rule — vérifié empiriquement (émulateur) avant
+  /// d'écrire ce commentaire, pas supposé : un artisan non lié obtient un
+  /// résultat vide, jamais une erreur.
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid);
 }
 
 /// Compteurs séparés par collection — jamais agrégés. Un artisan doit

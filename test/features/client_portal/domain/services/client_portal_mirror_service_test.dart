@@ -107,7 +107,7 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   @override
   Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) => throw UnimplementedError();
   @override
-  Future<BackfillOutcome?> getBackfillStatus(String portalUid) => throw UnimplementedError();
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid) => throw UnimplementedError();
 }
 
 Client _client({required String id, String? portalUid}) => Client(

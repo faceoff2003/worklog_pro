@@ -15,6 +15,7 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:worklog_pro/core/constants/constants.dart';
+import 'package:worklog_pro/core/value_objects/value_objects.dart';
 import 'package:worklog_pro/features/auth/domain/entities/app_user.dart';
 import 'package:worklog_pro/features/auth/presentation/providers/auth_provider.dart';
 import 'package:worklog_pro/features/client_portal/domain/entities/client_portal.dart';
@@ -27,7 +28,11 @@ import 'package:worklog_pro/features/clients/domain/entities/client.dart';
 import 'package:worklog_pro/features/clients/domain/repositories/client_repository.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/clients_provider.dart';
 import 'package:worklog_pro/features/expenses/domain/entities/expense.dart';
+import 'package:worklog_pro/features/expenses/domain/repositories/expense_repository.dart';
+import 'package:worklog_pro/features/expenses/presentation/providers/expenses_provider.dart';
 import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
+import 'package:worklog_pro/features/work_entries/domain/repositories/work_entry_repository.dart';
+import 'package:worklog_pro/features/work_entries/presentation/providers/work_entries_provider.dart';
 
 class _FakeProvisioner implements PortalAccountProvisioner {
   Object? throwOnCreateAccount;
@@ -60,6 +65,10 @@ class _FakeProvisioner implements PortalAccountProvisioner {
 class _FakeClientPortalRepository implements ClientPortalRepository {
   Object? throwOnCreatePortal;
 
+  int mirrorWorkEntriesBatchCallCount = 0;
+  int mirrorExpensesBatchCallCount = 0;
+  BackfillOutcome? lastSavedBackfillStatus;
+
   @override
   Future<void> createPortal({required String portalUid, required String artisanUid, required String clientId}) async {
     if (throwOnCreatePortal != null) throw throwOnCreatePortal!;
@@ -79,14 +88,64 @@ class _FakeClientPortalRepository implements ClientPortalRepository {
   Future<void> mirrorExpense(String portalUid, Expense expense) => throw UnimplementedError();
   @override
   Future<void> deleteMirroredExpense(String portalUid, String expenseId) => throw UnimplementedError();
+
+  // Comportement réel (pas UnimplementedError) : la création déclenche
+  // maintenant une reprise d'historique automatique (C-PORTAL.9 étape 3),
+  // ces trois méthodes sont donc réellement exercées par ce fichier.
   @override
-  Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries) => throw UnimplementedError();
+  Future<void> mirrorWorkEntriesBatch(String portalUid, List<WorkEntry> entries) async {
+    mirrorWorkEntriesBatchCallCount++;
+  }
+
   @override
-  Future<void> mirrorExpensesBatch(String portalUid, List<Expense> expenses) => throw UnimplementedError();
+  Future<void> mirrorExpensesBatch(String portalUid, List<Expense> expenses) async {
+    mirrorExpensesBatchCallCount++;
+  }
+
   @override
-  Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) => throw UnimplementedError();
+  Future<void> saveBackfillStatus(String portalUid, BackfillOutcome outcome) async {
+    lastSavedBackfillStatus = outcome;
+  }
+
   @override
-  Future<BackfillOutcome?> getBackfillStatus(String portalUid) => throw UnimplementedError();
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid) => throw UnimplementedError();
+}
+
+class _FakeWorkEntryRepository implements WorkEntryRepository {
+  List<WorkEntry> entries = [];
+
+  @override
+  Future<List<WorkEntry>> getWorkEntries({DateOnly? from, DateOnly? to, String? clientId, String? projectId}) async =>
+      entries;
+
+  @override
+  Stream<List<WorkEntry>> watchWorkEntries({DateOnly? from, DateOnly? to, String? clientId, String? projectId}) =>
+      throw UnimplementedError();
+  @override
+  Future<WorkEntry?> getWorkEntry(String id) => throw UnimplementedError();
+  @override
+  Future<WorkEntry> createWorkEntry(WorkEntry workEntry) => throw UnimplementedError();
+  @override
+  Future<WorkEntry> updateWorkEntry(WorkEntry workEntry) => throw UnimplementedError();
+  @override
+  Future<void> deleteWorkEntry(String id) => throw UnimplementedError();
+}
+
+class _FakeExpenseRepository implements ExpenseRepository {
+  List<Expense> expenses = [];
+
+  @override
+  Future<List<Expense>> getExpenses({DateOnly? from, DateOnly? to, String? clientId, String? projectId}) async =>
+      expenses;
+
+  @override
+  Stream<List<Expense>> watchExpenses({String? clientId, String? projectId}) => throw UnimplementedError();
+  @override
+  Future<void> createExpense(Expense expense) => throw UnimplementedError();
+  @override
+  Future<void> updateExpense(Expense expense) => throw UnimplementedError();
+  @override
+  Future<void> deleteExpense(String id) => throw UnimplementedError();
 }
 
 class _FakeClientRepository implements ClientRepository {
@@ -139,6 +198,8 @@ class _Fakes {
   final portalRepository = _FakeClientPortalRepository();
   late final _FakeClientRepository clientRepository;
   final inviteEmailSender = _FakeInviteEmailSender();
+  final workEntryRepository = _FakeWorkEntryRepository();
+  final expenseRepository = _FakeExpenseRepository();
 
   _Fakes({Map<String, Client>? clients}) {
     clientRepository = _FakeClientRepository(clients ?? {'client-1': _testClient()});
@@ -157,6 +218,8 @@ Future<_Fakes> _pumpDialog(WidgetTester tester, {Client? client, _Fakes? fakes})
         clientPortalRepositoryProvider.overrideWithValue(f.portalRepository),
         clientRepositoryProvider.overrideWithValue(f.clientRepository),
         portalInviteEmailSenderProvider.overrideWithValue(f.inviteEmailSender),
+        workEntryRepositoryProvider.overrideWithValue(f.workEntryRepository),
+        expenseRepositoryProvider.overrideWithValue(f.expenseRepository),
       ],
       child: MaterialApp(
         home: Scaffold(
@@ -175,6 +238,20 @@ Future<_Fakes> _pumpDialog(WidgetTester tester, {Client? client, _Fakes? fakes})
   return f;
 }
 
+WorkEntry _entry(String id) => WorkEntry(
+      id: id,
+      date: DateOnly.fromString('2026-01-01'),
+      startTime: 480,
+      endTime: 720,
+      durationMinutes: 240,
+      clientId: 'client-1',
+      billingMode: BillingMode.hourly,
+      rateApplied: Money.fromCents(2000),
+      laborAmountHT: Money.fromCents(8000),
+      createdAt: DateTime(2026, 1, 1),
+      updatedAt: DateTime(2026, 1, 1),
+    );
+
 void main() {
   testWidgets('succès — email envoyé, dialog fermé, SnackBar verte', (tester) async {
     await _pumpDialog(tester);
@@ -184,6 +261,48 @@ void main() {
     expect(find.text('Créer un accès portail'), findsNothing);
     expect(find.text('Portail créé pour jean@example.com. Email d\'accès envoyé.'), findsOneWidget);
   });
+
+  testWidgets(
+    'succès avec historique existant (C-PORTAL.9 étape 3) → la reprise se déclenche réellement en tâche de '
+    'fond, statut persisté avec les compteurs réels',
+    (tester) async {
+      final fakes = _Fakes()..workEntryRepository.entries = [_entry('e1'), _entry('e2')];
+      await _pumpDialog(tester, fakes: fakes);
+      await tester.tap(find.text('Créer le portail'));
+      await tester.pumpAndSettle();
+
+      expect(fakes.portalRepository.mirrorWorkEntriesBatchCallCount, 1);
+      expect(fakes.portalRepository.lastSavedBackfillStatus, isNotNull);
+      expect(fakes.portalRepository.lastSavedBackfillStatus!.totalWorkEntries, 2);
+      expect(fakes.portalRepository.lastSavedBackfillStatus!.mirroredWorkEntries, 2);
+    },
+  );
+
+  testWidgets(
+    'succès SANS aucun historique → le cas "vide" est quand même persisté (0/0), jamais un silence '
+    '(question explicite de William avant de coder cette étape)',
+    (tester) async {
+      final fakes = _Fakes(); // listes vides par défaut
+      await _pumpDialog(tester, fakes: fakes);
+      await tester.tap(find.text('Créer le portail'));
+      await tester.pumpAndSettle();
+
+      expect(fakes.portalRepository.lastSavedBackfillStatus, isNotNull);
+      expect(fakes.portalRepository.lastSavedBackfillStatus!.totalWorkEntries, 0);
+      expect(fakes.portalRepository.lastSavedBackfillStatus!.totalExpenses, 0);
+
+      // Le message "vide" arrive dans un 2e SnackBar, après celui de
+      // création — on avance le temps simulé au-delà de la durée du 1er
+      // pour voir apparaître le 2e, la preuve visuelle qu'il n'y a pas de
+      // silence.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Aucun historique à reprendre pour ce client (0 prestation, 0 dépense refacturable).'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets(
     'emailAlreadyInUse — message ré-orienté vers le renvoi, pas vers un changement d\'email, '

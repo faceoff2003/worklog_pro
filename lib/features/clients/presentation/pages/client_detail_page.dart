@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/core/widgets/delete_confirm_dialog.dart';
 import 'package:worklog_pro/core/widgets/detail_info_row.dart';
+import 'package:worklog_pro/features/client_portal/domain/repositories/client_portal_repository.dart';
 import 'package:worklog_pro/features/client_portal/presentation/pages/create_portal_dialog.dart';
+import 'package:worklog_pro/features/client_portal/presentation/providers/client_portal_backfill_provider.dart';
 import 'package:worklog_pro/features/client_portal/presentation/providers/client_portal_provider.dart';
+import 'package:worklog_pro/features/client_portal/presentation/widgets/backfill_outcome_feedback.dart';
 import 'package:worklog_pro/features/clients/domain/entities/client.dart';
 import 'package:worklog_pro/features/clients/presentation/pages/client_form_page.dart';
 import 'package:worklog_pro/features/clients/presentation/pages/settle_account_dialog.dart';
@@ -391,10 +394,14 @@ class _PortalSection extends ConsumerWidget {
       );
     }
 
-    // Watché seulement ICI (pas plus haut) : un client sans portail n'a
-    // aucune raison de construire ClientPortalProvisioningService (donc
-    // ClientPortalRepositoryImpl() -> Firestore réel).
+    final portalUid = client.portalUid!;
+
+    // Watchés seulement ICI (pas plus haut) : un client sans portail n'a
+    // aucune raison de construire ces services (donc ClientPortalRepository
+    // Impl() -> Firestore réel).
     final resendState = ref.watch(portalInviteResendControllerProvider);
+    final backfillState = ref.watch(clientPortalHistoryBackfillControllerProvider);
+    final backfillStatusAsync = ref.watch(backfillStatusProvider(portalUid));
 
     ref.listen<AsyncValue<bool?>>(portalInviteResendControllerProvider, (previous, next) {
       final sent = next.valueOrNull;
@@ -409,7 +416,20 @@ class _PortalSection extends ConsumerWidget {
       );
     });
 
+    // Un seul retour possible : jamais de silence pendant que la reprise
+    // tourne (previous.isLoading), pour ne réagir qu'à la TRANSITION vers un
+    // état terminé — sinon l'état initial AsyncValue.data(null) déclencherait
+    // aussi ce listener au tout premier build.
+    ref.listen<AsyncValue<BackfillOutcome?>>(clientPortalHistoryBackfillControllerProvider, (previous, next) {
+      if (previous?.isLoading != true) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        next.hasError ? backfillErrorSnackBar() : backfillOutcomeSnackBar(next.value!),
+      );
+      ref.invalidate(backfillStatusProvider(portalUid));
+    });
+
     final resendLoading = resendState.isLoading;
+    final backfillLoading = backfillState.isLoading;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -442,6 +462,100 @@ class _PortalSection extends ConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        _BackfillStatusRow(statusAsync: backfillStatusAsync),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: backfillLoading
+                ? null
+                : () => ref
+                    .read(clientPortalHistoryBackfillControllerProvider.notifier)
+                    .runBackfill(portalUid: portalUid, clientId: client.id),
+            icon: backfillLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.history, size: 18),
+            label: const Text('Reprendre l\'historique'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.indigo,
+              side: const BorderSide(color: Colors.indigo),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Indicateur PERSISTANT (survit à la navigation, contrairement au SnackBar
+/// de fin de reprise) — trois états distincts, jamais un compteur agrégé :
+/// jamais lancé (ex. un portail créé avant C-PORTAL.9), complet, incomplet.
+class _BackfillStatusRow extends StatelessWidget {
+  final AsyncValue<BackfillOutcome?> statusAsync;
+  const _BackfillStatusRow({required this.statusAsync});
+
+  @override
+  Widget build(BuildContext context) {
+    return statusAsync.when(
+      loading: () => const SizedBox(
+        height: 16,
+        width: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+      error: (_, __) => Text(
+        'Impossible de vérifier l\'historique.',
+        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+      ),
+      data: (outcome) {
+        if (outcome == null) {
+          return _statusLine(
+            icon: Icons.info_outline,
+            color: Colors.amber.shade800,
+            text: 'Historique jamais repris pour ce client.',
+          );
+        }
+        final color = outcome.isComplete ? Colors.green.shade700 : Colors.orange.shade800;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _statusLine(
+              icon: outcome.isComplete ? Icons.check_circle_outline : Icons.warning_amber_rounded,
+              color: color,
+              text: outcome.isComplete ? 'Historique à jour' : 'Historique incomplet',
+            ),
+            const SizedBox(height: 2),
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Text(
+                'Prestations : ${outcome.mirroredWorkEntries}/${outcome.totalWorkEntries}',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 24),
+              child: Text(
+                'Dépenses : ${outcome.mirroredExpenses}/${outcome.totalExpenses}',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _statusLine({required IconData icon, required Color color, required String text}) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Text(text, style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600)),
       ],
     );
   }

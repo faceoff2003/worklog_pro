@@ -111,9 +111,16 @@ class ClientPortalRepositoryImpl implements ClientPortalRepository {
   }
 
   @override
-  Future<BackfillOutcome?> getBackfillStatus(String portalUid) async {
-    final data = (await _portalDoc(portalUid).get()).data();
-    if (data == null || !data.containsKey('backfillWorkEntriesTotal')) return null;
+  Future<BackfillOutcome?> getBackfillStatus(String portalUid, String artisanUid) async {
+    // PAS de get() direct : allow get exige isOwner(portalUid), fermé à
+    // l'artisan (vérifié empiriquement, voir la note sur l'interface).
+    // Même requête filtrée que listPortalsForArtisan, filtrée à nouveau
+    // côté client par portalUid — aucune nouvelle rule.
+    final snapshot = await _firestore.collection('clientPortals').where('artisanUid', isEqualTo: artisanUid).get();
+    final matches = snapshot.docs.where((doc) => doc.id == portalUid);
+    if (matches.isEmpty) return null;
+    final data = matches.first.data();
+    if (!data.containsKey('backfillWorkEntriesTotal')) return null;
     return BackfillOutcome(
       totalWorkEntries: data['backfillWorkEntriesTotal'] as int,
       mirroredWorkEntries: data['backfillWorkEntriesMirrored'] as int,

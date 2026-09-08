@@ -569,6 +569,32 @@ avec des mois d'historique réel. Rend la fonctionnalité inutilisable en
 pratique tant que C-PORTAL.9 n'est pas fait — identifié par William
 avant la clôture de C-PORTAL.8, pas découvert en test.
 
+### En cours — C-PORTAL.9 (reprise de l'historique, 2026-09-08/09)
+Backfill de l'historique existant au provisioning + à la demande. Étapes 1
+(service + primitives batch), 2 (statut persisté sur `clientPortals`,
+immuable côté client) et 3 (UI : indicateur persistant, bouton "Reprendre
+l'historique", SnackBar à la création) faites. Reste : rien identifié à ce
+stade, sprint pas encore clos.
+
+**Constat sur la frontière code/Firebase, à ranger avec celui de C-PORTAL.7**
+(un sens de lecture testé, pas l'autre) : `ClientPortalRepositoryImpl.
+getBackfillStatus()` tel qu'écrit à l'étape 2 faisait un `.get()` direct sur
+`clientPortals/{portalUid}` — or `allow get` sur ce document exige
+`isOwner(portalUid)` (le CLIENT) et n'a JAMAIS autorisé l'artisan, qui ne
+peut que `list()` (filtré par `artisanUid`, déjà utilisé par
+`listPortalsForArtisan`). Un test rules existait déjà pour le prouver
+("l'artisan lié lui-même ne peut pas lire le profil via un get() direct")
+mais n'avait jamais été mis en regard du nouveau code de l'étape 2 avant
+l'étape 3. Le test AVD de l'étape 2 ne l'a pas non plus révélé : il ne
+couvrait que `saveBackfillStatus()` (écriture, où `update()` n'a pas cette
+asymétrie get/list), jamais la lecture. Autrement dit : **on avait testé un
+sens de l'accès (écriture) et pas l'autre (lecture)** — le trou n'était pas
+un défaut de couverture, mais une couverture unilatérale sur une opération
+qui a deux sens. Corrigé en étape 3 en réutilisant la requête `list` déjà
+déployée (aucune nouvelle rule, aucun redéploiement), avec deux nouveaux
+tests rules empiriques (artisan lié → trouve son document ; artisan non lié
+→ résultat vide, jamais une erreur) AVANT d'écrire le moindre code Dart.
+
 ### Résiduelle (connue, non bloquante)
 
 #### Code mort / incomplet
