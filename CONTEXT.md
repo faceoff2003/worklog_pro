@@ -7,6 +7,11 @@
 > §5 nouvelle collection `clientPortals`, §6 nouveaux écrans, §9 fixes +
 > dette, §10 rules déployées + I2 confirmé, §12 — voir aussi
 > `doc/C-PORTAL_SPRINT_REPORT.md`)
+> **Resynchronisé post-C-PORTAL.8 le 2026-09-09** (vraie liste de
+> prestations côté client : §5 lecture du miroir, §6 `ClientHomePage`
+> réelle, §9 fix + résiduel majeur découvert (pas de backfill de
+> l'historique — traité en C-PORTAL.9, pas encore fait), §12 — voir
+> `doc/C-PORTAL-8_SPRINT_REPORT.md`)
 > Basé exclusivement sur le code source réel
 
 ---
@@ -352,7 +357,13 @@ de lecture triviale (`isOwner(portalUid)`, un seul niveau).
 uniquement par l'artisan lié :
 - `clientPortals/{portalUid}/workEntries/{entryId}` — copie curée d'un
   `WorkEntry` (`notes`, `tags`, `timerUsed`, `attachments` retirés —
-  détails internes à l'artisan, sans sens côté portail).
+  détails internes à l'artisan, sans sens côté portail). Lu côté client
+  par `ClientMirrorRepository.watchMyWorkEntries()` (C-PORTAL.8) —
+  aucun paramètre `portalUid`, le uid est dérivé de la session
+  authentifiée au constructeur, jamais reçu en paramètre externe.
+  **N'est peuplé que par les écritures qui arrivent APRÈS la création
+  du portail** — pas de backfill de l'historique existant, résiduel
+  majeur, voir §9 (traité en C-PORTAL.9, pas encore fait).
 - `clientPortals/{portalUid}/expenses/{expenseId}` — copie curée d'un
   `Expense`, uniquement si `isBillable == true` (réaffirmé dans les
   rules, pas seulement côté Dart).
@@ -407,7 +418,7 @@ complet des règles et leur justification (get/list séparés, coût des
 | PaymentDetailPage | payments | ✅ |
 | ReportsPage | reports | ✅ (filtres date/client/projet) |
 | SettingsPage | settings | ✅ (profil artisan + thème) |
-| ClientHomePage | client_portal | ✅ (C-PORTAL.7, minimal — accueil client, la liste de prestations depuis le miroir est une étape séparée à venir) |
+| ClientHomePage | client_portal | ✅ (C-PORTAL.8 — vraie liste de prestations depuis le miroir, triée date décroissante ; dépenses côté client toujours une étape à venir) |
 | ClientDisabledPage | client_portal | ✅ (C-PORTAL.7 — `enabled == false`, ton informatif, pas un échec) |
 | RoleCheckBlockedPage | client_portal | ✅ (C-PORTAL.7 — erreur non-réseau lors du routage de rôle, Réessayer + Se déconnecter) |
 
@@ -539,6 +550,25 @@ que les fakes, par construction, ne peuvent pas couvrir puisqu'ils
 simulent le contrat qu'on croit correct, pas le comportement réel du
 service. Détail dans `doc/C-PORTAL_SPRINT_REPORT.md`.
 
+### Résolue en C-PORTAL.8 (2026-09-09)
+Vraie liste de prestations côté client, 2 étapes. Détail complet dans
+`doc/C-PORTAL-8_SPRINT_REPORT.md`.
+
+| # | Problème | Fix |
+|---|---|---|
+| C-PORTAL.8 (besoin) | `ClientHomePage` était un placeholder, aucune lecture réelle du miroir | `ClientMirrorRepository.watchMyWorkEntries()` — aucun paramètre `portalUid`, uid dérivé de la session au constructeur uniquement ✅ |
+| C-PORTAL.8 (conception) | Tri par date à départager pour deux prestations du même jour, sans exiger d'index composite Firestore | `orderBy('date')` seul côté Firestore (indexé automatiquement) + tri secondaire par `createdAt` côté Dart ✅ |
+| C-PORTAL.8 (bug trouvé par un test, pas supposé) | `ref.listen` réinvalidant `userPortalProvider` sur chaque `permission-denied` du flux — sans garde, un test a montré 1 → 2 → 3 → 4 appels `getPortal()` pour 3 échecs consécutifs, sans borne | Garde "une réinvalidation par épisode d'erreur", réarmée à la reprise — testé avant ET après le fix (le test sans garde est gardé comme régression) ✅ |
+
+**Résiduel majeur, pas corrigé par ce fix — traité en C-PORTAL.9** :
+le mirroring ne s'applique qu'aux écritures qui arrivent APRÈS la
+création du portail (voir §5, `clientPortals/{portalUid}/workEntries`)
+— aucun backfill de l'historique existant. Un client dont le portail
+est créé aujourd'hui ne voit AUCUNE de ses prestations passées, même
+avec des mois d'historique réel. Rend la fonctionnalité inutilisable en
+pratique tant que C-PORTAL.9 n'est pas fait — identifié par William
+avant la clôture de C-PORTAL.8, pas découvert en test.
+
 ### Résiduelle (connue, non bloquante)
 
 #### Code mort / incomplet
@@ -643,6 +673,36 @@ rôle artisan réel lui était attribué plus tard.
 router vers le blocage sur une vraie panne réseau serait pire (un
 artisan hors ligne bloqué en production) que ce résiduel (des documents
 orphelins sous un uid qui n'a jamais eu de compte artisan légitime).
+
+#### Miroir client (C-PORTAL.8) — un flux rouvert après désactivation sert quand même les données (mesuré le 2026-09-08)
+**Mesuré empiriquement contre la VRAIE prod** (pas l'émulateur —
+confirmé sur les deux, mais c'est la prod qui compte), Android, avec
+un artisan et un client réels :
+
+```
+Flux DÉJÀ ouvert, avant désactivation           -> reçoit les données normalement
+CE MÊME flux, après désactivation (5s après)    -> ERREUR permission-denied (coupé correctement)
+get() frais, après désactivation                -> permission-denied
+snapshots() FRAIS (nouveau), après désactivation -> AUCUNE erreur, données renvoyées quand même
+```
+
+Un flux **déjà ouvert** au moment de la désactivation est bien coupé
+avec une erreur — c'est le scénario réel qui compte (un client déjà
+sur `ClientHomePage`, désactivé en cours de route). Un flux
+**nouvellement rouvert après coup** ne l'est pas : Firestore continue
+de servir les données comme si le portail était encore actif, sans
+erreur. Aucune documentation officielle Firestore trouvée confirmant
+ce mécanisme (recherché avant de conclure) — c'est un comportement réel
+mesuré, pas déduit d'une doc.
+
+**Résiduel accepté, pas corrigé** — calibré explicitement par William :
+désactiver un portail n'est pas une révocation d'urgence dans son
+usage. Le client concerné ne voit que **ses propres prestations**,
+quelques minutes de plus tout au plus (jusqu'à sa prochaine
+reconnexion complète, qui repasse par `PostAuthRoleRouter` et son
+`.get()` — protégé, voir C-PORTAL.7 ci-dessus) — jamais les données
+d'un tiers. Pas une architecture de révocation temps réel voulue ni
+nécessaire pour ce niveau de risque.
 
 #### App Check web (I2) — code d'erreur inconnu sur une lecture, risque non mesuré pour un artisan (2026-09-08)
 **Problème** : App Check est confirmé actif côté console pour Firestore
@@ -834,21 +894,26 @@ de `settings.updatedAt`) sont **déployés sur le projet Firebase
 | Firestore rules cohérentes | ✅ **Corrigées** (W-FIX1.1 + W-FIX1.6) |
 | `firstWhere` protégés | ✅ **Sécurisés** (W-FIX1.2) |
 | Dépendances nettoyées | ✅ **Allégé** (W-FIX1.5) |
-| Tests automatisés | ✅ **401 tests unitaires/widgets** + suite rules (149) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur trois sprints (R-SEC, F-SETTINGS, C-PORTAL) |
+| Tests automatisés | ✅ **406 tests unitaires/widgets** + suite rules (149) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur quatre sprints (R-SEC, F-SETTINGS, C-PORTAL, C-PORTAL.8) |
 | Deep linking / navigation web | ❌ Navigator 1.0 basique |
 | `flutter analyze` | ✅ 0 erreur · 0 warning · **12 info** (dont 11 volontaires) |
 | Rules Firestore M2-M5 + F-SETTINGS.8 + clientPortals (C-PORTAL) | ✅ **Déployées et vérifiées sur appareil** (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
 | Réglages artisan synchronisés cloud (F-SETTINGS) | ✅ `SyncingSettingsRepository`, local-first + réconciliation Firestore |
-| Portail client (C-PORTAL) | ✅ Provisioning, routage de rôle, miroir workEntries/expenses/commentaires en lecture seule — écrans minimaux, vraie liste de prestations en attente (étape séparée) |
-| Build APK release | ✅ Réussi (C-PORTAL.7, 2026-09-08) |
+| Portail client (C-PORTAL) | ⚠️ Provisioning, routage de rôle, `ClientHomePage` affiche la vraie liste de prestations (C-PORTAL.8) — **mais aucun backfill de l'historique existant** (C-PORTAL.9, pas encore fait) : inutilisable en pratique pour un client avec des prestations antérieures à la création de son portail |
+| Build APK release | ✅ Réussi (C-PORTAL.8, 2026-09-09) |
 
 ### Niveau de stabilité
 **Beta avancée / production-candidat** — Stable et sécurisé pour le
 déploiement Firebase Hosting / Play Store. Les rules R-SEC.2,
 l'extension F-SETTINGS.8 et le bloc `clientPortals` (C-PORTAL) sont
-déployés et vérifiés.
+déployés et vérifiés. **Le portail client n'est pas encore utilisable
+en pratique** (voir résiduel majeur ci-dessous) tant que C-PORTAL.9
+n'est pas fait.
 
 Blocants restants avant prod réelle :
+- **Aucun backfill de l'historique du miroir** (C-PORTAL.8, résiduel
+  majeur, §9) — bloquant pour un usage réel du portail client, pas
+  juste une amélioration.
 - Navigation web non déclarative → URLs non partageables
 - Couverture de tests concentrée sur le chemin argent-critique, les
   réglages (F-SETTINGS) et le portail client (C-PORTAL) — les autres
@@ -861,12 +926,19 @@ Blocants restants avant prod réelle :
   artisan, gain nul), un client mal routé pour raison réseau peut
   écrire dans son propre espace vide, App Check web sans branche debug
   (dette préexistante, découverte ce sprint) avec un code d'erreur non
-  mesuré sur lecture — voir `doc/C-PORTAL_SPRINT_REPORT.md`
+  mesuré sur lecture, un flux du miroir rouvert après désactivation sert
+  quand même les données quelques minutes (calibré comme acceptable) —
+  voir `doc/C-PORTAL_SPRINT_REPORT.md` et `doc/C-PORTAL-8_SPRINT_REPORT.md`
 
 ### Prochaines étapes suggérées
-1. **Vraie liste de prestations dans `ClientHomePage`** depuis le miroir (étape C-PORTAL suivante, périmètre et preuve d'isolation déjà discutés avec William).
-2. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
-3. **Branche debug App Check pour le web** (§9 Dette) — décision de William, hors périmètre C-PORTAL.
-4. **Étendre la couverture de tests** aux repositories restants (ex. `WorkEntryRepositoryImpl` contre l'émulateur Firestore) et aux pages à 0%.
-5. **Findings L1-L6 et I1-I5** (SECURITY_AUDIT.md) : décider s'ils méritent un futur sprint sécurité ou restent acceptés en l'état.
-6. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR.
+1. **C-PORTAL.9 — reprise de l'historique au provisioning** (backfill
+   `WorkEntry`/`Expense` par batchs, idempotent, bouton "Reprendre
+   l'historique" sur `ClientDetailPage`) — bloquant pour un usage réel
+   du portail client, priorité avant toute autre étape C-PORTAL.
+2. **Dépenses côté client** dans `ClientHomePage` — étape séparée,
+   après C-PORTAL.9.
+3. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
+4. **Branche debug App Check pour le web** (§9 Dette) — décision de William, hors périmètre C-PORTAL.
+5. **Étendre la couverture de tests** aux repositories restants (ex. `WorkEntryRepositoryImpl` contre l'émulateur Firestore) et aux pages à 0%.
+6. **Findings L1-L6 et I1-I5** (SECURITY_AUDIT.md) : décider s'ils méritent un futur sprint sécurité ou restent acceptés en l'état.
+7. **CI/CD GitHub Actions** : lint + build automatisés sur chaque PR.
