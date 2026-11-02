@@ -1,7 +1,7 @@
 # F-FIX-SOLDE — Conception du solde partiel (étape 4)
 
-> **Conception seule, aucun code écrit.** En attente de validation de William.
-> Les décisions à trancher sont au §10.
+> **Conception seule, aucun code écrit.** Décisions validées par William le
+> 2026-11-03 (§10). Étape 5 pas encore lancée.
 
 ## 1. Le besoin
 
@@ -148,16 +148,19 @@ doivent être mis à jour avant le premier report.
 puis premier report. L'inverse fonctionnerait techniquement, puisque le `create`
 accepte déjà les champs inconnus, mais sans validation de type (§3).
 
-## 10. Décisions à trancher
+## 10. Décisions — validées par William le 2026-11-03
 
-| # | Question | Ma recommandation |
+| # | Question | Décision |
 |---|---|---|
-| 1 | Le montant reporté est-il modifiable ? | **Non, X = le solde exact.** Pour un paiement partiel : on saisit le paiement, puis on reporte le reste. Pas de chiffre libre, immuable en plus. |
-| 2 | Choix présélectionné dans le dialog ? | **Aucun**, le bouton reste inactif tant qu'on n'a pas choisi : abandonner une dette doit être un acte conscient. |
-| 3 | Statut des prestations d'une période close avec report ? | **« Soldée » conservé**, le report reste visible en ligne dédiée. Il n'est pas réparti par prestation. |
-| 4 | Corriger D2 dans ce sprint ? | **Oui, en étape 5**, avant le reste (§8). |
-| 5 | Report dans les PDF, Excel et rapports inclus ? | **Oui**, sinon facture et solde divergent de nouveau (§5). |
-| 6 | Portail : mirrorer les paiements ou des résultats calculés ? | **À traiter dans C-PORTAL.10.** Mirrorer des résultats expose moins de données au client, à discuter. |
+| 1 | Le montant reporté est-il modifiable ? | **Non, X = le solde exact.** Pour un paiement partiel : on saisit le paiement, puis on reporte le reste. |
+| 2 | Choix présélectionné dans le dialog ? | **Aucun**, le bouton reste inactif tant qu'on n'a pas choisi. |
+| 3 | Statut des prestations d'une période close avec report ? | **« Soldée »**, le report reste visible en ligne dédiée, sans répartition par prestation. |
+| 4 | Corriger D2 dans ce sprint ? | **Oui, en premier** (§8). |
+| 5 | Report dans les PDF, Excel et rapports inclus ? | **Oui, en étapes séparées** : service, puis relevé, puis PDF/Excel (§5). |
+| 6 | Portail : mirrorer les paiements ou des résultats calculés ? | **Tranché dans C-PORTAL.10**, avec un penchant pour les résultats calculés. |
+
+**Ajout au périmètre de l'étape 5, validé par William le 2026-11-03** : les cartes
+de prestation et le graphique du CA incluent les déplacements.
 
 ## 11. Hors périmètre
 
