@@ -620,10 +620,10 @@ Relevé de compte client, calculé et jamais stocké. Détail dans
 
 #### Solde client — défauts constatés en F-RELEVE, reproduits à l'identique (2026-11-02)
 Décision de William attendue. Le sprint interdisait tout changement du résultat.
-- **D1 — déplacements hors solde** : `clientBalanceProvider` et le relevé ignorent
-  `travelAmountHT`, alors que `ReportData.totalProduction` l'inclut. Le solde
-  client est donc inférieur au "Reste à percevoir" des rapports et factures dès
-  qu'une prestation comporte un déplacement.
+- ~~**D1 — déplacements hors solde**~~ : **corrigé en F-FIX-SOLDE.2**
+  (2026-11-02, branche non mergée). Le solde et le relevé valent désormais
+  `ReportData.theoreticalBalance`. Les soldes passés ne sont pas recalculés. Voir
+  `doc/F-FIX-SOLDE_SPRINT_REPORT.md`.
 - **D2 — deux soldes le même jour** : le "dernier" solde est choisi par `date`
   seule, l'égalité dépend de l'ordre des documents Firestore. Le second solde du
   jour peut être ignoré.
@@ -956,7 +956,7 @@ de `settings.updatedAt`) sont **déployés sur le projet Firebase
 | Firestore rules cohérentes | ✅ **Corrigées** (W-FIX1.1 + W-FIX1.6) |
 | `firstWhere` protégés | ✅ **Sécurisés** (W-FIX1.2) |
 | Dépendances nettoyées | ✅ **Allégé** (W-FIX1.5) |
-| Tests automatisés | ✅ **490 tests unitaires/widgets** + suite rules (154) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur six sprints (R-SEC, F-SETTINGS, C-PORTAL, C-PORTAL.8, C-PORTAL.9, F-RELEVE) |
+| Tests automatisés | ✅ **500 tests unitaires/widgets** + suite rules (154) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur six sprints (R-SEC, F-SETTINGS, C-PORTAL, C-PORTAL.8, C-PORTAL.9, F-RELEVE) |
 | Relevé de compte client (F-RELEVE) | ✅ Calculé, jamais stocké — pas encore testé sur appareil réel, branche non mergée |
 | Deep linking / navigation web | ❌ Navigator 1.0 basique |
 | `flutter analyze` | ✅ 0 erreur · 0 warning · **12 info** (dont 11 volontaires) |

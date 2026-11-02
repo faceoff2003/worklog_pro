@@ -91,3 +91,7 @@ sont "soldées", même si le solde a été enregistré avec un reste dû.
 | D3 | `watchLastSettlement` renvoie `null` si **un** document est illisible, `watchAllSettlements` l'ignore seulement | Un document corrompu remet le solde à "jamais soldé" sans erreur, et le relevé (qui lit tous les soldes) peut alors différer de la carte Compte |
 
 Le service reproduit D1 et D2 à l'identique (condition d'arrêt du sprint).
+
+**Mise à jour F-FIX-SOLDE.2 (2026-11-02)** : D1 est corrigé, le §1 et le test de
+caractérisation associé ne décrivent plus le comportement actuel. Le solde inclut
+désormais `travelAmountHT`.
