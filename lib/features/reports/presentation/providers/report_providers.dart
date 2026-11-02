@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/core/value_objects/date_only.dart';
 import 'package:worklog_pro/core/value_objects/money.dart';
+import 'package:worklog_pro/features/clients/domain/entities/client_settlement.dart';
+import 'package:worklog_pro/features/clients/presentation/providers/settlement_provider.dart';
 import 'package:worklog_pro/features/expenses/presentation/providers/expenses_provider.dart';
 import 'package:worklog_pro/features/payments/presentation/providers/payments_provider.dart';
 import 'package:worklog_pro/features/reports/domain/entities/report_data.dart';
@@ -13,10 +15,16 @@ class ReportFilter {
   final String? clientId;
   final String? projectId;
 
+  /// Remplace la période : ne garde que les lignes saisies après le dernier
+  /// solde du client (même coupure `createdAt` que le solde du compte).
+  /// Jamais vrai sans client sélectionné.
+  final bool sinceLastSettlement;
+
   ReportFilter({
     required this.dateRange,
     this.clientId,
     this.projectId,
+    this.sinceLastSettlement = false,
   });
 
   factory ReportFilter.initial() {
@@ -33,11 +41,13 @@ class ReportFilter {
     String? clientId,
     String? projectId,
     bool clearProject = false,
+    bool? sinceLastSettlement,
   }) {
     return ReportFilter(
       dateRange: dateRange ?? this.dateRange,
       clientId: clientId ?? this.clientId,
       projectId: clearProject ? null : (projectId ?? this.projectId),
+      sinceLastSettlement: sinceLastSettlement ?? this.sinceLastSettlement,
     );
   }
 }
@@ -61,11 +71,16 @@ class ReportFilterController extends StateNotifier<ReportFilter> {
       dateRange: state.dateRange,
       clientId: clientId,
       projectId: null,
+      sinceLastSettlement: clientId != null && state.sinceLastSettlement,
     );
   }
 
   void updateProject(String? projectId) {
     state = state.copyWith(projectId: projectId, clearProject: projectId == null);
+  }
+
+  void updateSinceLastSettlement(bool enabled) {
+    state = state.copyWith(sinceLastSettlement: enabled && state.clientId != null);
   }
 }
 
@@ -106,8 +121,16 @@ final reportDataProvider = Provider<AsyncValue<ReportData>>((ref) {
   // Payments are filtered by client (no project-level filter available at stream level)
   final paymentsAsync = ref.watch(paymentsStreamProvider(clientId));
 
+  final since = filter.sinceLastSettlement && clientId != null;
+  final settlementAsync = since
+      ? ref.watch(lastSettlementProvider(clientId))
+      : const AsyncValue<ClientSettlement?>.data(null);
+
   // Propagate loading
-  if (workEntriesAsync.isLoading || expensesAsync.isLoading || paymentsAsync.isLoading) {
+  if (workEntriesAsync.isLoading ||
+      expensesAsync.isLoading ||
+      paymentsAsync.isLoading ||
+      settlementAsync.isLoading) {
     return const AsyncValue.loading();
   }
 
@@ -124,16 +147,26 @@ final reportDataProvider = Provider<AsyncValue<ReportData>>((ref) {
   if (paymentsError != null) {
     return AsyncValue.error(paymentsError, paymentsAsync.stackTrace!);
   }
+  final settlementError = settlementAsync.error;
+  if (settlementError != null) {
+    return AsyncValue.error(settlementError, settlementAsync.stackTrace!);
+  }
 
   // All data available — compute the report
   final allEntries = workEntriesAsync.value ?? [];
   final allExpenses = expensesAsync.value ?? [];
   final allPayments = paymentsAsync.value ?? [];
+  final lastSettlement = settlementAsync.value;
+
+  bool inPeriod(dynamic item) {
+    if (!since) return (item.date >= from && item.date <= to) as bool;
+    return lastSettlement == null || (item.createdAt as DateTime).isAfter(lastSettlement.createdAt);
+  }
 
   // Apply date filters (and local project filter on payments if needed)
   final workEntries = allEntries.where((e) {
     final entry = e as dynamic;
-    final dateInRange = entry.date >= from && entry.date <= to;
+    final dateInRange = inPeriod(entry);
     // If project filter is active, also filter by project
     if (projectId != null) {
       return dateInRange && entry.projectId == projectId;
@@ -143,7 +176,7 @@ final reportDataProvider = Provider<AsyncValue<ReportData>>((ref) {
 
   final expenses = allExpenses.where((e) {
     final expense = e as dynamic;
-    final dateInRange = expense.date >= from && expense.date <= to;
+    final dateInRange = inPeriod(expense);
     if (projectId != null) {
       return dateInRange && expense.projectId == projectId;
     }
@@ -153,7 +186,7 @@ final reportDataProvider = Provider<AsyncValue<ReportData>>((ref) {
   // Payments: filter by date (and project if applicable)
   final filteredPayments = allPayments.where((p) {
     final payment = p as dynamic;
-    final dateInRange = payment.date >= from && payment.date <= to;
+    final dateInRange = inPeriod(payment);
     if (projectId != null) {
       return dateInRange && payment.projectId == projectId;
     }
@@ -184,6 +217,18 @@ final reportDataProvider = Provider<AsyncValue<ReportData>>((ref) {
     totalPayments += (payment as dynamic).amount as Money;
   }
 
+  // Les exports PDF/Excel affichent dateRange : en mode "depuis le dernier
+  // solde", elle doit couvrir les lignes retenues, pas la période masquée.
+  var dateRange = filter.dateRange;
+  if (since) {
+    final dates = <DateOnly>[
+      DateOnly.today(),
+      if (lastSettlement != null) lastSettlement.date,
+      for (final item in [...workEntries, ...expenses, ...filteredPayments]) (item as dynamic).date as DateOnly,
+    ]..sort();
+    dateRange = DateTimeRange(start: dates.first.toDateTime(), end: dates.last.toDateTime());
+  }
+
   return AsyncValue.data(ReportData(
     totalLaborAmount: totalLabor,
     totalTravelAmount: totalTravel,
@@ -193,6 +238,6 @@ final reportDataProvider = Provider<AsyncValue<ReportData>>((ref) {
     workEntries: workEntries.cast(),
     expenses: expenses.cast(),
     payments: filteredPayments.cast(),
-    dateRange: filter.dateRange,
+    dateRange: dateRange,
   ));
 });
