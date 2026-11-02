@@ -159,7 +159,7 @@ final reportDataProvider = Provider<AsyncValue<ReportData>>((ref) {
   final lastSettlement = settlementAsync.value;
 
   bool inPeriod(dynamic item) {
-    if (!since) return (item.date >= from && item.date <= to) as bool;
+    if (!since) return item.date >= from && item.date <= to;
     return lastSettlement == null || (item.createdAt as DateTime).isAfter(lastSettlement.createdAt);
   }
 
