@@ -38,6 +38,7 @@
 | Sévérité | Nombre |
 |---|---|
 | Medium | 1 (CP1, fix partiel appliqué, **déployé** le 2026-09-08, résiduel documenté) |
+| Low | 1 (CP2, **ouvert**, à corriger en C-PORTAL.10, trouvé le 2026-11-02) |
 
 Voir aussi I2 (§3) : confirmé actif pour Firestore pendant ce sprint,
 et §7ter pour la clôture complète.
@@ -329,6 +330,38 @@ propre artisan) est fermé par ce fix.
 (comme toutes les rules C-PORTAL). Résiduel accepté et documenté,
 pas de Cloud Function prévue pour le fermer complètement dans ce
 sprint.**
+
+### CP2 — `clientPortals/{portalUid}` : le client peut réécrire `lastSettlementCreatedAt` (ouvert)
+**Sévérité** : Low. **Statut : ouvert, à corriger en C-PORTAL.10.** Trouvé le
+2026-11-02 pendant la conception du solde partiel (F-FIX-SOLDE.4).
+
+**Fichier** : `firestore.rules` (`match /clientPortals/{portalUid}`, seconde
+branche `allow update: if isOwner(portalUid)`)
+
+**Portée actuelle** : le champ pivot n'existe que sur `feature/c-portal-10`
+(`c1c11ef`), non mergée. Aucun code de `main` ne l'écrit ni ne le lit.
+
+La branche client ne protège que les champs qu'elle liste (`enabled`,
+`artisanUid`, `clientId`, `createdAt`, compteurs `backfill*`). `c1c11ef` ajoute
+`ClientPortal.lastSettlementCreatedAt` sans modifier `firestore.rules`, et rien
+n'empêche d'écrire un autre champ (pas de closed schema, voir L5).
+
+**Ce qu'un client peut faire** : modifier le pivot de son propre document, donc
+déplacer la limite archives/en cours de son propre affichage, ou le rendre illisible.
+Il ne peut toucher ni les données de l'artisan, ni celles d'un tiers, ni le solde
+calculé côté artisan, qui ne lit pas ce champ. Le type de valeur illisible ferait
+probablement échouer la désérialisation du profil, à évaluer avec le routage de
+rôle (`decideRoleRoute()` bloque sur une erreur non réseau).
+
+**Vérification** : déduit de la lecture des rules, **pas encore prouvé à
+l'émulateur** (`firebase-tools` exige Java 21, la machine a le JDK 17).
+
+**Fix proposé** : ajouter à la branche client, comme pour les compteurs `backfill*` :
+`request.resource.data.get('lastSettlementCreatedAt', null) == resource.data.get('lastSettlementCreatedAt', null)`.
+Même traitement pour tout champ de report ajouté par le solde partiel
+(`doc/F-FIX-SOLDE_PARTIAL_DESIGN.md` §6). Tests rules d'abord : le client est
+refusé, seul ou noyé dans un update multi-champs ; l'artisan lié reste autorisé.
+**À déployer avant ou avec le code qui écrit le pivot.**
 
 ---
 
