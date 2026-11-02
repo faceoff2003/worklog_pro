@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/core/value_objects/value_objects.dart';
 import 'package:worklog_pro/core/widgets/delete_confirm_dialog.dart';
+import 'package:worklog_pro/features/clients/domain/services/account_statement_service.dart';
+import 'package:worklog_pro/features/clients/presentation/providers/account_statement_provider.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/clients_provider.dart';
+import 'package:worklog_pro/features/clients/presentation/widgets/work_entry_status_badge.dart';
 import 'package:worklog_pro/features/projects/presentation/providers/projects_provider.dart';
 import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
 import 'package:worklog_pro/features/work_entries/domain/services/work_calculator_service.dart';
@@ -28,8 +31,12 @@ class WorkEntriesListPage extends ConsumerWidget {
       entriesAsync = ref.watch(workEntriesStreamProvider);
     }
 
+    final statuses = clientId != null && projectId == null
+        ? ref.watch(accountStatementProvider(clientId!)).valueOrNull?.workEntryStatuses
+        : null;
+
     final calculator = ref.read(workCalculatorServiceProvider);
-    
+
     final String title = projectId != null ? 'Prestations (Chantier)' : 
                          clientId != null ? 'Prestations (Client)' : 
                          'Journal des Prestations';
@@ -86,7 +93,7 @@ class WorkEntriesListPage extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _DateHeader(date: date, totalDuration: dailyMinutes, totalAmount: dailyTotal),
-                  ...dateEntries.map((entry) => _WorkEntryCard(entry: entry, calculator: calculator)),
+                  ...dateEntries.map((entry) => _WorkEntryCard(entry: entry, calculator: calculator, status: statuses?[entry.id])),
                   const SizedBox(height: 16),
                 ],
               );
@@ -157,8 +164,9 @@ class _DateHeader extends StatelessWidget {
 class _WorkEntryCard extends ConsumerWidget {
   final WorkEntry entry;
   final WorkCalculatorService calculator;
+  final WorkEntryPaymentStatus? status;
 
-  const _WorkEntryCard({required this.entry, required this.calculator});
+  const _WorkEntryCard({required this.entry, required this.calculator, this.status});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -264,6 +272,13 @@ class _WorkEntryCard extends ConsumerWidget {
                        ),
                     ],
                  ),
+              ],
+              if (status != null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: WorkEntryStatusBadge(status: status!),
+                ),
               ],
               if (entry.notes != null && entry.notes!.isNotEmpty) ...[
                   const SizedBox(height: 8),
