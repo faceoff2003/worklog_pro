@@ -14,6 +14,7 @@ import 'package:worklog_pro/features/work_entries/presentation/providers/work_en
 /// **strictement postérieures** à [settlementDate] sont comptabilisées.
 /// Les données antérieures restent archivées mais n'affectent plus la balance courante.
 class ClientBalance {
+  /// Main d'œuvre et déplacements.
   final Money totalWork;
   final Money totalExpenses;
   final Money totalPayments;

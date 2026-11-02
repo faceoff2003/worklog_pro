@@ -287,7 +287,7 @@ class _AccountSection extends StatelessWidget {
 
             // Lignes de balance
             _BalanceRow(
-              label: 'Total M.O. + dépenses',
+              label: 'Total M.O. + déplacements + dépenses',
               value: balance.totalDue.toEurosString(),
               valueColor: Colors.grey.shade700,
             ),

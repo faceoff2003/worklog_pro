@@ -115,9 +115,12 @@ void main() {
     expect(b.totalExpenses, Money.zero);
   });
 
-  test('D1 : travelAmountHT ignoré par le solde', () async {
+  // F-FIX-SOLDE.2 : changement volontaire, remplace "D1 : travelAmountHT ignoré
+  // par le solde" (attendait 10000). Voir doc/F-FIX-SOLDE_SPRINT_REPORT.md.
+  test('travelAmountHT inclus dans le solde, comme dans le PDF', () async {
     final b = await _balance(work: [_work(10000, at: before, travelCents: 1234)]);
-    expect(b.balance.amountCents, 10000);
+    expect(b.totalWork.amountCents, 11234);
+    expect(b.balance.amountCents, 11234);
   });
 
   test('paiement partiel : le reste dû est la différence', () async {

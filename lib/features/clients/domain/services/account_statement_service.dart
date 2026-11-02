@@ -108,8 +108,8 @@ class AccountStatement {
 /// **Dernier solde** : `date` la plus récente, en cas d'égalité le premier dans
 /// l'ordre d'entrée, comme `SettlementRepository.watchLastSettlement`.
 ///
-/// **Montant d'une prestation** : `laborAmountHT` seul, `travelAmountHT` n'entre
-/// pas dans le solde.
+/// **Montant d'une prestation** : `laborAmountHT + travelAmountHT`. Le solde est
+/// ce que facture le PDF, soit `ReportData.theoreticalBalance`.
 ///
 /// **Ordre** : par époque, puis `date`, puis prestation < dépense < paiement,
 /// puis `createdAt`, puis `id`. Indépendant de l'ordre d'entrée. Une ligne saisie
@@ -179,7 +179,7 @@ class AccountStatementService {
 
   List<_Draft> _drafts(List<WorkEntry> workEntries, List<Expense> expenses, List<Payment> payments) => [
         for (final e in workEntries)
-          _Draft(StatementLineType.workEntry, e.id, e.date, e.createdAt, e.laborAmountHT,
+          _Draft(StatementLineType.workEntry, e.id, e.date, e.createdAt, e.laborAmountHT + e.travelAmountHT,
               e.tasks.isNotEmpty ? e.tasks.join(', ') : e.notes),
         for (final e in expenses)
           if (e.isBillable) _Draft(StatementLineType.expense, e.id, e.date, e.createdAt, e.amountHT, e.description),

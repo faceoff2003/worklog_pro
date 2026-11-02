@@ -110,10 +110,34 @@ void main() {
       expect(s.totalExpenses, Money.zero);
     });
 
-    test('déplacement exclu, comme clientBalanceProvider', () {
+    // F-FIX-SOLDE.2 : changement volontaire, remplace "déplacement exclu, comme
+    // clientBalanceProvider" (attendait 10000).
+    test('déplacement inclus dans la ligne, le solde courant et le total', () {
       final s = _build(work: [_work('w1', 10000, 1, travelCents: 1234)]);
-      expect(s.lines.single.amount.amountCents, 10000);
-      expect(s.balance.amountCents, 10000);
+      expect(s.lines.single.amount.amountCents, 11234);
+      expect(s.lines.single.runningBalance.amountCents, 11234);
+      expect(s.totalWork.amountCents, 11234);
+      expect(s.balance.amountCents, 11234);
+    });
+
+    test('déplacement couvert par le FIFO : main-d\'œuvre seule payée = partielle', () {
+      final st = _build(
+        work: [_work('w1', 10000, 1, travelCents: 1234)],
+        payments: [_payment('p1', 10000, 2)],
+      );
+      final s = st.workEntryStatuses['w1']!;
+      expect(s.state, WorkEntryPaymentState.partial);
+      expect(s.remaining.amountCents, 1234);
+      expect(st.balance.amountCents, 1234);
+    });
+
+    test('paiement du montant facturé : payée, solde nul, plus de fausse avance', () {
+      final st = _build(
+        work: [_work('w1', 10000, 1, travelCents: 1234)],
+        payments: [_payment('p1', 11234, 2)],
+      );
+      expect(st.workEntryStatuses['w1']!.state, WorkEntryPaymentState.paid);
+      expect(st.balance, Money.zero);
     });
 
     test('description : tâches, sinon notes ; dépense ; note de paiement et de solde', () {
