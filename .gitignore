@@ -186,3 +186,6 @@ migrate_working_dir/
 # Coverage
 coverage/
 lcov.info
+
+# Local APK backups
+backups/
