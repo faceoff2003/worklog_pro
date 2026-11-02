@@ -134,6 +134,7 @@ class _LineTile extends StatelessWidget {
     final isPayment = line.type == StatementLineType.payment;
     final description = line.description;
     final status = line.status;
+    final enteredOn = line.enteredOn;
 
     return Opacity(
       key: ValueKey('statement_line_${line.id}'),
@@ -149,6 +150,9 @@ class _LineTile extends StatelessWidget {
                 children: [
                   Text('${line.date.formatEuropean()} · $_title',
                       style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+                  if (enteredOn != null)
+                    Text('saisie le ${enteredOn.formatEuropean().substring(0, 5)}',
+                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.orange.shade800)),
                   if (description != null && description.isNotEmpty)
                     Text(description,
                         maxLines: 2,

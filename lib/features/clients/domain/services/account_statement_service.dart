@@ -56,6 +56,10 @@ class StatementLine {
   /// Renseigné uniquement pour une prestation.
   final WorkEntryPaymentStatus? status;
 
+  /// Jour de saisie, renseigné uniquement si [date] est antérieure à celle du
+  /// solde qui précède la ligne (saisie en retard).
+  final DateOnly? enteredOn;
+
   const StatementLine({
     required this.type,
     required this.id,
@@ -65,6 +69,7 @@ class StatementLine {
     required this.isArchived,
     this.description,
     this.status,
+    this.enteredOn,
   });
 }
 
@@ -155,12 +160,12 @@ class AccountStatementService {
       if (identical(closing[i], last)) {
         lines.addAll(others.where((s) => s.createdAt.isAfter(last!.createdAt)).map(_settlementLine));
       }
-      lines.addAll(_epochLines(buckets[i], isArchived: true));
+      lines.addAll(_epochLines(buckets[i], isArchived: true, previous: i == 0 ? null : closing[i - 1]));
       lines.add(_settlementLine(closing[i]));
     }
 
     final current = buckets.last;
-    lines.addAll(_epochLines(current, isArchived: false));
+    lines.addAll(_epochLines(current, isArchived: false, previous: closing.lastOrNull));
 
     return AccountStatement(
       lines: lines,
@@ -195,7 +200,7 @@ class AccountStatementService {
     return byCreatedAt != 0 ? byCreatedAt : a.id.compareTo(b.id);
   }
 
-  List<StatementLine> _epochLines(List<_Draft> drafts, {required bool isArchived}) {
+  List<StatementLine> _epochLines(List<_Draft> drafts, {required bool isArchived, ClientSettlement? previous}) {
     var unallocated = -_sum(drafts, StatementLineType.payment);
     var running = Money.zero;
     final lines = <StatementLine>[];
@@ -226,6 +231,7 @@ class AccountStatementService {
         isArchived: isArchived,
         description: draft.description,
         status: status,
+        enteredOn: previous != null && draft.date < previous.date ? DateOnly.fromDateTime(draft.createdAt) : null,
       ));
     }
     return lines;

@@ -83,6 +83,31 @@ void main() {
     expect(opacityOf('new').opacity, 1);
   });
 
+  testWidgets('mention "saisie le JJ/MM" seulement sur la ligne saisie en retard', (tester) async {
+    await _pump(
+      tester,
+      AsyncValue.data(_statement([
+        _line(StatementLineType.settlement, 's1', '2026-03-05', 0, 0, archived: true),
+        StatementLine(
+          type: StatementLineType.workEntry,
+          id: 'late',
+          date: DateOnly.fromString('2026-03-01'),
+          amount: Money.fromCents(700),
+          runningBalance: Money.fromCents(700),
+          isArchived: false,
+          enteredOn: DateOnly.fromString('2026-03-09'),
+        ),
+        _line(StatementLineType.workEntry, 'normal', '2026-03-06', 100, 800),
+      ], work: 800)),
+    );
+    expect(find.text('saisie le 09/03'), findsOneWidget);
+    expect(find.textContaining('saisie le'), findsOneWidget);
+    expect(
+      find.descendant(of: find.byKey(const ValueKey('statement_line_late')), matching: find.text('saisie le 09/03')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('solde négatif affiché comme une avance', (tester) async {
     await _pump(
       tester,

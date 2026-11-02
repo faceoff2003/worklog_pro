@@ -333,6 +333,55 @@ void main() {
       expect(s.balance.amountCents, 400);
     });
 
+    group('enteredOn (saisie en retard)', () {
+      test('date antérieure au solde qui précède : jour de saisie, tous types de ligne', () {
+        final s = _build(
+          work: [_work('w', 100, 1, at: _at(9))],
+          expenses: [_expense('e', 100, 2, at: _at(10))],
+          payments: [_payment('p', 100, 3, at: _at(11))],
+          settlements: [_settlement('s1', 5)],
+        );
+        expect(s.lines.first.type, StatementLineType.settlement);
+        expect(s.lines.skip(1).map((l) => l.enteredOn), [_d(9), _d(10), _d(11)]);
+      });
+
+      test('même jour ou après le solde : pas de mention', () {
+        final s = _build(
+          work: [_work('same', 100, 5, at: _at(5, 15)), _work('after', 100, 6)],
+          settlements: [_settlement('s1', 5)],
+        );
+        expect(s.lines.skip(1).map((l) => l.enteredOn), [null, null]);
+      });
+
+      test('sans solde, ou dans la première époque : pas de mention', () {
+        final s = _build(
+          work: [_work('w', 100, 1, at: _at(4))],
+          settlements: [_settlement('s1', 5)],
+        );
+        expect(s.lines.first.enteredOn, isNull);
+        expect(_build(work: [_work('w', 100, 1, at: _at(20))]).lines.single.enteredOn, isNull);
+      });
+
+      test('époque close : comparée au solde précédent, pas à celui qui la ferme', () {
+        final s = _build(
+          work: [_work('late', 100, 1, at: _at(7)), _work('ok', 100, 6, at: _at(7))],
+          settlements: [_settlement('s1', 5), _settlement('s2', 10)],
+        );
+        final byId = {for (final l in s.lines) l.id: l};
+        expect(byId['late']!.isArchived, isTrue);
+        expect(byId['late']!.enteredOn, _d(7));
+        expect(byId['ok']!.enteredOn, isNull);
+      });
+
+      test('solde non retenu (égalité de date) : pas de mention, aucune ligne', () {
+        final s = _build(settlements: [
+          _settlement('first', 5, at: _at(5, 10)),
+          _settlement('second', 5, at: _at(5, 14)),
+        ]);
+        expect(s.lines.every((l) => l.enteredOn == null), isTrue);
+      });
+    });
+
     test('createdAt égaux entre soldes : départage par id', () {
       final s = _build(settlements: [
         _settlement('z', 5),
