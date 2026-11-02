@@ -28,6 +28,8 @@ import 'package:worklog_pro/features/client_portal/domain/services/portal_invite
 import 'package:worklog_pro/features/client_portal/presentation/providers/client_portal_provider.dart';
 import 'package:worklog_pro/features/clients/domain/entities/client.dart';
 import 'package:worklog_pro/features/clients/presentation/pages/client_detail_page.dart';
+import 'package:worklog_pro/features/clients/domain/services/account_statement_service.dart';
+import 'package:worklog_pro/features/clients/presentation/providers/account_statement_provider.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/client_balance_providers.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/clients_provider.dart';
 import 'package:worklog_pro/features/clients/domain/repositories/client_repository.dart';
@@ -203,6 +205,9 @@ Future<_FakeInviteEmailSender> _pumpPage(
     ProviderScope(
       overrides: [
         clientBalanceProvider(client.id).overrideWithValue(AsyncValue.data(ClientBalance.zero())),
+        accountStatementProvider(client.id).overrideWithValue(const AsyncValue.data(
+          AccountStatement(lines: [], totalWork: Money.zero, totalExpenses: Money.zero, totalPayments: Money.zero),
+        )),
         currentUserProvider.overrideWithValue(
           AppUser(uid: 'artisan-1', email: 'artisan@example.com', createdAt: DateTime(2026, 1, 1)),
         ),
@@ -229,6 +234,16 @@ Future<_FakeInviteEmailSender> _pumpPage(
 }
 
 void main() {
+  testWidgets('"Voir le relevé" ouvre la page relevé du client', (tester) async {
+    await _pumpPage(tester, _client(email: 'jean@example.com', portalUid: null));
+    final button = find.byKey(const ValueKey('open_statement_button'));
+    await tester.dragUntilVisible(button, find.byType(Scrollable), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(find.text('Aucune opération'), findsOneWidget);
+  });
+
   testWidgets('pas de portail : bouton "Créer un accès portail" visible, pas de "Portail actif"', (tester) async {
     await _pumpPage(tester, _client(email: 'jean@example.com', portalUid: null));
 
