@@ -10,6 +10,7 @@ import 'package:worklog_pro/features/client_portal/presentation/widgets/backfill
 import 'package:worklog_pro/features/clients/domain/entities/client.dart';
 import 'package:worklog_pro/features/clients/presentation/pages/client_form_page.dart';
 import 'package:worklog_pro/features/clients/presentation/pages/settle_account_dialog.dart';
+import 'package:worklog_pro/features/clients/presentation/pages/account_statement_page.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/client_balance_providers.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/clients_provider.dart';
 
@@ -286,7 +287,7 @@ class _AccountSection extends StatelessWidget {
 
             // Lignes de balance
             _BalanceRow(
-              label: 'Total M.O. + dépenses',
+              label: 'Total M.O. + déplacements + dépenses',
               value: balance.totalDue.toEurosString(),
               valueColor: Colors.grey.shade700,
             ),
@@ -328,6 +329,20 @@ class _AccountSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
+              ),
+            ),
+
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                key: const ValueKey('open_statement_button'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AccountStatementPage(clientId: client.id, clientName: client.name),
+                  ),
+                ),
+                icon: const Icon(Icons.receipt_long, size: 18),
+                label: const Text('Voir le relevé'),
               ),
             ),
 

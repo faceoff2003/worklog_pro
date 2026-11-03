@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/core/value_objects/date_only.dart';
 import 'package:worklog_pro/core/value_objects/money.dart';
 import 'package:worklog_pro/features/clients/domain/entities/client_settlement.dart';
+import 'package:worklog_pro/features/clients/domain/services/account_statement_service.dart';
 import 'package:worklog_pro/features/clients/presentation/providers/settlement_provider.dart';
 import 'package:worklog_pro/features/expenses/presentation/providers/expenses_provider.dart';
 import 'package:worklog_pro/features/payments/presentation/providers/payments_provider.dart';
@@ -13,6 +14,7 @@ import 'package:worklog_pro/features/work_entries/presentation/providers/work_en
 /// **strictement postérieures** à [settlementDate] sont comptabilisées.
 /// Les données antérieures restent archivées mais n'affectent plus la balance courante.
 class ClientBalance {
+  /// Main d'œuvre et déplacements.
   final Money totalWork;
   final Money totalExpenses;
   final Money totalPayments;
@@ -80,52 +82,19 @@ final clientBalanceProvider =
     return AsyncValue.error(settlementAsync.error!, settlementAsync.stackTrace!);
   }
 
-  final allWorkEntries = workEntriesAsync.value ?? [];
-  final allExpenses = expensesAsync.value ?? [];
-  final allPayments = paymentsAsync.value ?? [];
   final lastSettlement = settlementAsync.value; // null = jamais soldé
 
-  // Si un solde existe, on filtre pour ne garder que les entrées créées
-  // APRES l'instant précis du solde (createdAt > cutoffTime)
-  final cutoffTime = lastSettlement?.createdAt;
-
-  final workEntries = cutoffTime == null
-      ? allWorkEntries
-      : allWorkEntries
-          .where((e) => e.createdAt.isAfter(cutoffTime))
-          .toList();
-
-  final expenses = cutoffTime == null
-      ? allExpenses
-      : allExpenses
-          .where((e) => e.createdAt.isAfter(cutoffTime))
-          .toList();
-
-  final payments = cutoffTime == null
-      ? allPayments
-      : allPayments.where((p) => p.createdAt.isAfter(cutoffTime)).toList();
-
-  Money totalWork = Money.zero;
-  for (final entry in workEntries) {
-    totalWork += entry.laborAmountHT;
-  }
-
-  Money totalExpenses = Money.zero;
-  for (final expense in expenses) {
-    if (expense.isBillable) {
-      totalExpenses += expense.amountHT;
-    }
-  }
-
-  Money totalPayments = Money.zero;
-  for (final payment in payments) {
-    totalPayments += payment.amount;
-  }
+  final statement = const AccountStatementService().build(
+    workEntries: workEntriesAsync.value ?? [],
+    expenses: expensesAsync.value ?? [],
+    payments: paymentsAsync.value ?? [],
+    settlements: [if (lastSettlement != null) lastSettlement],
+  );
 
   return AsyncValue.data(ClientBalance(
-    totalWork: totalWork,
-    totalExpenses: totalExpenses,
-    totalPayments: totalPayments,
+    totalWork: statement.totalWork,
+    totalExpenses: statement.totalExpenses,
+    totalPayments: statement.totalPayments,
     settlementDate: lastSettlement?.date,
     balanceAtLastSettlement: lastSettlement?.balanceAtSettlement,
   ));

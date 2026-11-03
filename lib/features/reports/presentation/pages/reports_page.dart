@@ -150,7 +150,7 @@ class ReportsPage extends ConsumerWidget {
               children: [
                 // Date Range Filter
                 InkWell(
-                  onTap: () async {
+                  onTap: filter.sinceLastSettlement ? null : () async {
                     final picked = await showDateRangePicker(
                       context: context,
                       initialDateRange: filter.dateRange,
@@ -181,7 +181,9 @@ class ReportsPage extends ConsumerWidget {
                       prefixIcon: Icon(Icons.calendar_today),
                     ),
                     child: Text(
-                      '${DateFormat('dd/MM/yyyy').format(filter.dateRange.start)} - ${DateFormat('dd/MM/yyyy').format(filter.dateRange.end)}',
+                      filter.sinceLastSettlement
+                          ? 'Depuis le dernier solde'
+                          : '${DateFormat('dd/MM/yyyy').format(filter.dateRange.start)} - ${DateFormat('dd/MM/yyyy').format(filter.dateRange.end)}',
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   ),
@@ -238,6 +240,12 @@ class ReportsPage extends ConsumerWidget {
                         error: (e, s) => Text('Erreur projets: $e'),
                       );
                     },
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Depuis le dernier solde'),
+                    value: filter.sinceLastSettlement,
+                    onChanged: ref.read(reportFilterProvider.notifier).updateSinceLastSettlement,
                   ),
                 ],
               ],

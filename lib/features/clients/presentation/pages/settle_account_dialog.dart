@@ -116,7 +116,7 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
 
             // Résumé financier
             _SummaryRow(
-              label: 'Total dû (M.O. + dépenses)',
+              label: 'Total dû (M.O. + déplacements + dépenses)',
               value: balance.totalDue,
               color: Colors.grey.shade700,
             ),

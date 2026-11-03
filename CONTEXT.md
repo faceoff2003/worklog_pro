@@ -15,6 +15,9 @@
 > **Resynchronisé post-C-PORTAL.9 le 2026-09-09** (reprise de l'historique :
 > §9 fix + résiduel majeur fermé, §12 portail client enfin utilisable en
 > pratique — voir `doc/C-PORTAL-9_SPRINT_REPORT.md`)
+> **Resynchronisé post-F-RELEVE le 2026-11-02** (relevé de compte calculé :
+> §5 règle réelle de coupure, §6 nouvelle page, §9 fix + trois défauts
+> constatés non corrigés, §12 — voir `doc/F-RELEVE_SPRINT_REPORT.md`)
 > Basé exclusivement sur le code source réel
 
 ---
@@ -329,7 +332,7 @@ archivés mais ne comptent plus dans le solde courant affiché.
 |---|---|---|
 | id | string | UUID v4 |
 | clientId | string | FK → clients |
-| date | string | YYYY-MM-DD — seules les entrées **postérieures** comptent dans le solde courant |
+| date | string | YYYY-MM-DD — sert à choisir le dernier solde et à l'affichage ; **aucun effet sur le montant** : la coupure du solde courant se fait sur `createdAt` (voir `doc/F-RELEVE_PLAN.md`) |
 | balanceAtSettlement | int | centimes (Money), solde au moment de la remise à zéro (archivage) |
 | note | string? | libre |
 | createdAt | timestamp | |
@@ -406,6 +409,7 @@ complet des règles et leur justification (get/list séparés, coût des
 | HomePage | home | ✅ (dashboard KPIs + graphique CA 6 mois) |
 | ClientsListPage | clients | ✅ |
 | ClientFormPage | clients | ✅ |
+| AccountStatementPage | clients | ✅ (F-RELEVE — relevé calculé par `AccountStatementService`, ouvert depuis `ClientDetailPage`) |
 | ClientDetailPage | clients | ✅ (+ remise à zéro du solde — `showSettleAccountDialog`, sprint-3 ; + création/renvoi d'accès portail — `showCreatePortalDialog`, C-PORTAL.6) |
 | ProjectsListPage | projects | ✅ |
 | ProjectFormPage | projects | ✅ |
@@ -603,9 +607,33 @@ déployée (aucune nouvelle rule, aucun redéploiement), avec deux nouveaux
 tests rules empiriques (artisan lié → trouve son document ; artisan non lié
 → résultat vide, jamais une erreur) AVANT d'écrire le moindre code Dart.
 
+### Résolue en F-RELEVE (2026-11-02)
+Relevé de compte client, calculé et jamais stocké. Détail dans
+`doc/F-RELEVE_SPRINT_REPORT.md`.
+
+| # | Problème | Fix |
+|---|---|---|
+| F-RELEVE (besoin) | Seul un solde global existait, sans détail ligne par ligne ni statut par prestation | `AccountStatementService` (Dart pur), `accountStatementProvider`, `AccountStatementPage`, badges dans la liste de prestations du client, filtre "Depuis le dernier solde" dans `ReportsPage` ✅ |
+| F-RELEVE (structurel) | Calcul du solde dans un provider, sans aucun test | 14 tests de caractérisation, puis `clientBalanceProvider` branché sur le service, résultat identique ✅ |
+
 ### Résiduelle (connue, non bloquante)
 
+#### Solde client — défauts constatés en F-RELEVE, reproduits à l'identique (2026-11-02)
+Décision de William attendue. Le sprint interdisait tout changement du résultat.
+- ~~**D1 — déplacements hors solde**~~ : **corrigé en F-FIX-SOLDE.2**
+  (2026-11-02, branche non mergée). Le solde et le relevé valent désormais
+  `ReportData.theoreticalBalance`. Les soldes passés ne sont pas recalculés. Voir
+  `doc/F-FIX-SOLDE_SPRINT_REPORT.md`.
+- **D2 — deux soldes le même jour** : le "dernier" solde est choisi par `date`
+  seule, l'égalité dépend de l'ordre des documents Firestore. Le second solde du
+  jour peut être ignoré.
+- **D3 — document de solde illisible** : `watchLastSettlement` renvoie alors
+  `null` (compte "jamais soldé", sans erreur), `watchAllSettlements` ignore
+  seulement ce document. Le relevé peut alors différer de la carte Compte.
+
 #### Code mort / incomplet
+- **`PaymentStatus`** (`enums.dart`) : déclaré, jamais calculé ni lu. Non réutilisé
+  par F-RELEVE, ses valeurs parlent de facturation et non de couverture.
 - **`lib/core/migrations/`** : toujours vide. `schemaVersion: 1` existe sur `Settings` mais aucune migration n'a été nécessaire pour l'ajout du champ `updatedAt` en F-SETTINGS.4 (nullable, sans `@Default` — un JSON local existant reste lisible tel quel). Reste en attente d'un futur changement de schéma qui en aurait réellement besoin.
 
 #### Résiduel du sprint F-SETTINGS (2026-09-07) — connu, non corrigé
@@ -928,13 +956,14 @@ de `settings.updatedAt`) sont **déployés sur le projet Firebase
 | Firestore rules cohérentes | ✅ **Corrigées** (W-FIX1.1 + W-FIX1.6) |
 | `firstWhere` protégés | ✅ **Sécurisés** (W-FIX1.2) |
 | Dépendances nettoyées | ✅ **Allégé** (W-FIX1.5) |
-| Tests automatisés | ✅ **431 tests unitaires/widgets** + suite rules (154) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur cinq sprints (R-SEC, F-SETTINGS, C-PORTAL, C-PORTAL.8, C-PORTAL.9) |
+| Tests automatisés | ✅ **500 tests unitaires/widgets** + suite rules (154) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur six sprints (R-SEC, F-SETTINGS, C-PORTAL, C-PORTAL.8, C-PORTAL.9, F-RELEVE) |
+| Relevé de compte client (F-RELEVE) | ✅ Calculé, jamais stocké — pas encore testé sur appareil réel, branche non mergée |
 | Deep linking / navigation web | ❌ Navigator 1.0 basique |
 | `flutter analyze` | ✅ 0 erreur · 0 warning · **12 info** (dont 11 volontaires) |
 | Rules Firestore M2-M5 + F-SETTINGS.8 + clientPortals (C-PORTAL) | ✅ **Déployées et vérifiées sur appareil** (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
 | Réglages artisan synchronisés cloud (F-SETTINGS) | ✅ `SyncingSettingsRepository`, local-first + réconciliation Firestore |
 | Portail client (C-PORTAL) | ✅ Provisioning, routage de rôle, `ClientHomePage` affiche la vraie liste de prestations (C-PORTAL.8), historique existant repris au provisioning et à la demande (C-PORTAL.9) — dépenses côté client (affichage) toujours une étape à venir |
-| Build APK release | ✅ Réussi (C-PORTAL.9, 2026-09-09) |
+| Build APK release | ✅ Réussi (F-RELEVE, 2026-11-02) |
 
 ### Niveau de stabilité
 **Beta avancée / production-candidat** — Stable et sécurisé pour le
@@ -965,7 +994,8 @@ Blocants restants avant prod réelle :
 1. **C-PORTAL.10 — distinction archives/en cours après un solde de
    compte** : le backfill (C-PORTAL.9) recopie tout sans distinction,
    un client voit dans la même liste ce qu'il a déjà payé et ce qu'il
-   doit — en conception, pas encore commencé.
+   doit — étape 1 sur `feature/c-portal-10` (`c1c11ef`), à rebaser sur
+   F-RELEVE après merge pour réutiliser `AccountStatementService`.
 2. **Dépenses côté client** dans `ClientHomePage` — étape séparée.
 3. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
 4. **Branche debug App Check pour le web** (§9 Dette) — décision de William, hors périmètre C-PORTAL.
