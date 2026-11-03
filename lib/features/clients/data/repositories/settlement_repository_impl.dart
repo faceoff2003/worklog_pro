@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:worklog_pro/features/clients/domain/entities/client_settlement.dart';
 import 'package:worklog_pro/features/clients/domain/repositories/settlement_repository.dart';
+import 'package:worklog_pro/features/clients/domain/services/account_statement_service.dart';
 
 /// Implémentation Firestore du [SettlementRepository].
 ///
@@ -37,7 +38,7 @@ class SettlementRepositoryImpl implements SettlementRepository {
         final settlements = snap.docs
             .map((doc) => ClientSettlement.fromJson(doc.data()))
             .toList();
-        settlements.sort((a, b) => b.date.compareTo(a.date));
+        settlements.sort(AccountStatementService.latestFirst);
         return settlements.first;
       } catch (_) {
         return null;
@@ -61,7 +62,7 @@ class SettlementRepositoryImpl implements SettlementRepository {
           })
           .whereType<ClientSettlement>()
           .toList();
-      settlements.sort((a, b) => b.date.compareTo(a.date));
+      settlements.sort(AccountStatementService.latestFirst);
       return settlements;
     });
   }

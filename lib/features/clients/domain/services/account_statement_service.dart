@@ -110,8 +110,9 @@ class AccountStatement {
 /// `createdAt` est strictement postérieur à celui du dernier solde. Une
 /// prestation datée le jour d'un solde compte donc si elle a été saisie après.
 ///
-/// **Dernier solde** : `date` la plus récente, en cas d'égalité le premier dans
-/// l'ordre d'entrée, comme `SettlementRepository.watchLastSettlement`.
+/// **Dernier solde** : `date` la plus récente, puis `createdAt` le plus récent,
+/// puis `id` le plus grand ([latestFirst], partagé avec
+/// `SettlementRepository.watchLastSettlement`).
 ///
 /// **Montant d'une prestation** : `laborAmountHT + travelAmountHT`. Le solde est
 /// ce que facture le PDF, soit `ReportData.theoreticalBalance`.
@@ -155,8 +156,8 @@ class AccountStatementService {
 
     final lines = <StatementLine>[];
     for (var i = 0; i < closing.length; i++) {
-      // Égalité de date : un solde saisi après le "dernier" n'a aucun effet sur
-      // le calcul. Il reste affiché, juste avant le solde retenu.
+      // Un solde saisi après le "dernier" mais daté avant lui n'a aucun effet
+      // sur le calcul. Il reste affiché, juste avant le solde retenu.
       if (identical(closing[i], last)) {
         lines.addAll(others.where((s) => s.createdAt.isAfter(last!.createdAt)).map(_settlementLine));
       }
@@ -176,10 +177,18 @@ class AccountStatementService {
     );
   }
 
+  /// Tri du plus récent au plus ancien : `date`, puis `createdAt`, puis `id`.
+  /// Le premier élément est le dernier solde (D2 : à date égale, le dernier saisi).
+  static int latestFirst(ClientSettlement a, ClientSettlement b) {
+    final byDate = b.date.compareTo(a.date);
+    if (byDate != 0) return byDate;
+    final byCreatedAt = b.createdAt.compareTo(a.createdAt);
+    return byCreatedAt != 0 ? byCreatedAt : b.id.compareTo(a.id);
+  }
+
   ClientSettlement? _lastSettlement(List<ClientSettlement> settlements) {
     if (settlements.isEmpty) return null;
-    final sorted = [...settlements]..sort((a, b) => b.date.compareTo(a.date));
-    return sorted.first;
+    return ([...settlements]..sort(latestFirst)).first;
   }
 
   List<_Draft> _drafts(List<WorkEntry> workEntries, List<Expense> expenses, List<Payment> payments) => [

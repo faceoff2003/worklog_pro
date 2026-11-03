@@ -307,7 +307,7 @@ void main() {
       expect(s.workEntryStatuses['c']!.state, WorkEntryPaymentState.unpaid);
     });
 
-    test("D2 : deux soldes le même jour, le premier en entrée est retenu même s'il est plus ancien", () {
+    test('D2 corrigé : deux soldes le même jour, le plus récent en createdAt est retenu', () {
       final s = _build(
         work: [_work('between', 100, 5, at: _at(5, 12)), _work('after', 200, 5, at: _at(5, 15))],
         settlements: [
@@ -315,9 +315,25 @@ void main() {
           _settlement('second', 5, at: _at(5, 14)),
         ],
       );
-      expect(s.lastSettlement?.id, 'first');
-      expect(s.balance.amountCents, 300, reason: 'second ignoré par le calcul');
-      expect(_ids(s), ['second', 'first', 'between', 'after']);
+      expect(s.lastSettlement?.id, 'second');
+      expect(s.balance.amountCents, 200);
+      expect(_ids(s), ['first', 'between', 'second', 'after']);
+    });
+
+    test('D2 corrigé : même date et même createdAt, départage par id', () {
+      final s = _build(settlements: [_settlement('b', 5), _settlement('a', 5)]);
+      expect(s.lastSettlement?.id, 'b');
+      expect(_build(settlements: [_settlement('a', 5), _settlement('b', 5)]).lastSettlement?.id, 'b');
+    });
+
+    test('date plus récente gagne sur createdAt : un solde saisi après mais daté avant est sans effet', () {
+      final s = _build(
+        work: [_work('w', 100, 5, at: _at(5, 15))],
+        settlements: [_settlement('main', 5, at: _at(5, 10)), _settlement('backdated', 4, at: _at(6))],
+      );
+      expect(s.lastSettlement?.id, 'main');
+      expect(s.balance.amountCents, 100);
+      expect(_ids(s), ['backdated', 'main', 'w']);
     });
 
     test('D2 : le solde retenu étant le plus récent, le précédent ferme sa propre époque', () {
@@ -373,7 +389,7 @@ void main() {
         expect(byId['ok']!.enteredOn, isNull);
       });
 
-      test('solde non retenu (égalité de date) : pas de mention, aucune ligne', () {
+      test('deux soldes le même jour : pas de mention, aucune ligne', () {
         final s = _build(settlements: [
           _settlement('first', 5, at: _at(5, 10)),
           _settlement('second', 5, at: _at(5, 14)),
