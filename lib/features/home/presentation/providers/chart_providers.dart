@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:worklog_pro/features/work_entries/presentation/providers/work_entries_provider.dart';
 
-/// Monthly revenue bar chart data — last 6 months
+/// Monthly revenue bar chart data — last 6 months.
+/// Main-d'œuvre + déplacements, comme le solde client et le PDF.
 final monthlyRevenueProvider = Provider<AsyncValue<List<MonthRevenue>>>((ref) {
   final entriesAsync = ref.watch(workEntriesStreamProvider);
   return entriesAsync.when(
@@ -23,7 +24,7 @@ final monthlyRevenueProvider = Provider<AsyncValue<List<MonthRevenue>>>((ref) {
         final date = e.date.toDateTime();
         final key = DateTime(date.year, date.month);
         if (map.containsKey(key)) {
-          map[key] = (map[key] ?? 0) + e.laborAmountHT.inEuros;
+          map[key] = (map[key] ?? 0) + (e.laborAmountHT + e.travelAmountHT).inEuros;
         }
       }
 

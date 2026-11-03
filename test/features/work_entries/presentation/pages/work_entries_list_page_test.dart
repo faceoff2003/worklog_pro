@@ -11,9 +11,7 @@ import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dar
 import 'package:worklog_pro/features/work_entries/presentation/pages/work_entries_list_page.dart';
 import 'package:worklog_pro/features/work_entries/presentation/providers/work_entries_provider.dart';
 
-final _entries = [
-  for (final (id, cents) in [('w1', 1000), ('w2', 2000)])
-    WorkEntry(
+WorkEntry _entry(String id, int cents, {int travelCents = 0}) => WorkEntry(
       id: id,
       date: DateOnly.fromString('2026-03-10'),
       startTime: 480,
@@ -23,16 +21,20 @@ final _entries = [
       billingMode: BillingMode.hourly,
       rateApplied: Money.fromCents(cents),
       laborAmountHT: Money.fromCents(cents),
+      travelAmountHT: Money.fromCents(travelCents),
       createdAt: DateTime(2026, 3, 10),
       updatedAt: DateTime(2026, 3, 10),
-    ),
-];
+    );
 
-Future<void> _pump(WidgetTester tester, Widget page, AsyncValue<AccountStatement> statement) async {
+final _entries = [_entry('w1', 1000), _entry('w2', 2000)];
+
+Future<void> _pump(WidgetTester tester, Widget page, AsyncValue<AccountStatement> statement,
+    {List<WorkEntry>? entries}) async {
+  final list = entries ?? _entries;
   await tester.pumpWidget(ProviderScope(
     overrides: [
-      workEntriesByClientStreamProvider('c1').overrideWith((ref) => Stream.value(_entries)),
-      workEntriesByProjectStreamProvider('p1').overrideWith((ref) => Stream.value(_entries)),
+      workEntriesByClientStreamProvider('c1').overrideWith((ref) => Stream.value(list)),
+      workEntriesByProjectStreamProvider('p1').overrideWith((ref) => Stream.value(list)),
       clientStreamProvider('c1').overrideWith((ref) => Stream<Client?>.value(null)),
       accountStatementProvider('c1').overrideWithValue(statement),
     ],
@@ -59,6 +61,18 @@ void main() {
     await _pump(tester, const WorkEntriesListPage(clientId: 'c1'), const AsyncValue.loading());
     expect(find.text('10,00 €'), findsOneWidget);
     expect(find.text('Impayée'), findsNothing);
+  });
+
+  testWidgets('carte et total du jour : main-d\'œuvre + déplacement', (tester) async {
+    await _pump(
+      tester,
+      const WorkEntriesListPage(clientId: 'c1'),
+      const AsyncValue.loading(),
+      entries: [_entry('w1', 1000, travelCents: 250), _entry('w2', 2000)],
+    );
+    expect(find.text('12,50 €'), findsOneWidget, reason: 'carte w1');
+    expect(find.text('20,00 €'), findsOneWidget, reason: 'carte w2');
+    expect(find.textContaining('32,50 €'), findsOneWidget, reason: 'total du jour');
   });
 
   testWidgets('liste par chantier : aucun badge', (tester) async {

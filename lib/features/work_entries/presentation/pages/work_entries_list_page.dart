@@ -85,7 +85,7 @@ class WorkEntriesListPage extends ConsumerWidget {
               Money dailyTotal = Money.zero;
               int dailyMinutes = 0;
               for (var e in dateEntries) {
-                dailyTotal += e.laborAmountHT; // Using LaborAmountHT which should be the total cost
+                dailyTotal += e.laborAmountHT + e.travelAmountHT; // comme le solde et le PDF
                 dailyMinutes += e.durationMinutes;
               }
 
@@ -213,7 +213,7 @@ class _WorkEntryCard extends ConsumerWidget {
                      children: [
                        // Amount
                        Text(
-                         entry.laborAmountHT.toEurosString(),
+                         (entry.laborAmountHT + entry.travelAmountHT).toEurosString(),
                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                        ),
                        PopupMenuButton<String>(
