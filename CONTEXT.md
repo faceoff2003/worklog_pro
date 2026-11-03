@@ -21,6 +21,10 @@
 > **Resynchronisé post-merge PR #7 le 2026-11-03** (F-RELEVE + F-FIX-SOLDE
 > étapes 0-4 mergés dans `main`, tag `v3-f-releve-merge`, testés sur appareil,
 > audit prod des déplacements fait — voir `doc/F-FIX-SOLDE_SPRINT_REPORT.md`)
+> **Resynchronisé post-F-FIX-SOLDE 5.0-5.7 le 2026-11-03** (solde partiel :
+> §5 `carriedOverAmount`, §9 D2 corrigé, §12 — branche
+> `feature/f-fix-solde-partiel` non mergée, rule non déployée — voir le §8 de
+> `doc/F-FIX-SOLDE_SPRINT_REPORT.md`)
 > Basé exclusivement sur le code source réel
 
 ---
@@ -337,6 +341,7 @@ archivés mais ne comptent plus dans le solde courant affiché.
 | clientId | string | FK → clients |
 | date | string | YYYY-MM-DD — sert à choisir le dernier solde et à l'affichage ; **aucun effet sur le montant** : la coupure du solde courant se fait sur `createdAt` (voir `doc/F-RELEVE_PLAN.md`) |
 | balanceAtSettlement | int | centimes (Money), solde au moment de la remise à zéro (archivage) |
+| carriedOverAmount | int? | centimes (Money), report sur la période suivante : positif dû, négatif avance ; absent ou null = 0 (F-FIX-SOLDE.5.2). Rule `create` : absent, null ou int |
 | note | string? | libre |
 | createdAt | timestamp | |
 
@@ -619,6 +624,15 @@ Relevé de compte client, calculé et jamais stocké. Détail dans
 | F-RELEVE (besoin) | Seul un solde global existait, sans détail ligne par ligne ni statut par prestation | `AccountStatementService` (Dart pur), `accountStatementProvider`, `AccountStatementPage`, badges dans la liste de prestations du client, filtre "Depuis le dernier solde" dans `ReportsPage` ✅ |
 | F-RELEVE (structurel) | Calcul du solde dans un provider, sans aucun test | 14 tests de caractérisation, puis `clientBalanceProvider` branché sur le service, résultat identique ✅ |
 
+### Résolue en F-FIX-SOLDE 5.0-5.7 (2026-11-03, branche non mergée)
+Détail au §8 de `doc/F-FIX-SOLDE_SPRINT_REPORT.md`.
+
+| # | Problème | Fix |
+|---|---|---|
+| D2 | Deux soldes le même jour : "dernier" arbitraire | `AccountStatementService.latestFirst` (date, puis `createdAt`, puis `id`), partagé avec le repository ✅ |
+| Solde partiel | Solder abandonnait toujours le reste dû ou l'avance | `carriedOverAmount`, ligne "Report à nouveau" dans le relevé, le dialog (choix obligatoire), les rapports, les PDF et l'Excel ✅ |
+| Déplacements à l'affichage | Cartes de prestation et graphique du CA en main-d'œuvre seule | Main-d'œuvre + déplacements ✅ (portail inchangé) |
+
 ### Résiduelle (connue, non bloquante)
 
 #### Solde client — défauts constatés en F-RELEVE, reproduits à l'identique (2026-11-02)
@@ -627,10 +641,8 @@ Relevé de compte client, calculé et jamais stocké. Détail dans
   solde modifié (Solamito, +19,20 €). Le solde et le relevé valent désormais
   `ReportData.theoreticalBalance`. Les soldes passés ne sont pas recalculés. Voir
   `doc/F-FIX-SOLDE_SPRINT_REPORT.md`.
-- **D2 — deux soldes le même jour** : le "dernier" solde est choisi par `date`
-  seule, l'égalité dépend de l'ordre des documents Firestore. Le second solde du
-  jour peut être ignoré. Correction prévue en premier dans F-FIX-SOLDE étape 5
-  (décision du 2026-11-03).
+- ~~**D2 — deux soldes le même jour**~~ : **corrigé en F-FIX-SOLDE.5.1**
+  (2026-11-03, branche non mergée) : à date égale, le dernier saisi gagne.
 - **D3 — document de solde illisible** : `watchLastSettlement` renvoie alors
   `null` (compte "jamais soldé", sans erreur), `watchAllSettlements` ignore
   seulement ce document. Le relevé peut alors différer de la carte Compte.
@@ -960,14 +972,15 @@ de `settings.updatedAt`) sont **déployés sur le projet Firebase
 | Firestore rules cohérentes | ✅ **Corrigées** (W-FIX1.1 + W-FIX1.6) |
 | `firstWhere` protégés | ✅ **Sécurisés** (W-FIX1.2) |
 | Dépendances nettoyées | ✅ **Allégé** (W-FIX1.5) |
-| Tests automatisés | ✅ **500 tests unitaires/widgets** + suite rules (154) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur six sprints (R-SEC, F-SETTINGS, C-PORTAL, C-PORTAL.8, C-PORTAL.9, F-RELEVE) |
+| Tests automatisés | ✅ **536 tests unitaires/widgets** + suite rules (165) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur six sprints (R-SEC, F-SETTINGS, C-PORTAL, C-PORTAL.8, C-PORTAL.9, F-RELEVE) |
 | Relevé de compte client (F-RELEVE + F-FIX-SOLDE 0-4) | ✅ Calculé, jamais stocké, déplacements inclus — mergé (PR #7), testé sur appareil le 2026-11-03 |
 | Deep linking / navigation web | ❌ Navigator 1.0 basique |
 | `flutter analyze` | ✅ 0 erreur · 0 warning · **12 info** (dont 11 volontaires) |
 | Rules Firestore M2-M5 + F-SETTINGS.8 + clientPortals (C-PORTAL) | ✅ **Déployées et vérifiées sur appareil** (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
 | Réglages artisan synchronisés cloud (F-SETTINGS) | ✅ `SyncingSettingsRepository`, local-first + réconciliation Firestore |
 | Portail client (C-PORTAL) | ✅ Provisioning, routage de rôle, `ClientHomePage` affiche la vraie liste de prestations (C-PORTAL.8), historique existant repris au provisioning et à la demande (C-PORTAL.9) — dépenses côté client (affichage) toujours une étape à venir |
-| Build APK release | ✅ Réussi (`main` après PR #7, 2026-11-03) |
+| Build APK release | ✅ Réussi (`feature/f-fix-solde-partiel`, 2026-11-03) |
+| Solde partiel (F-FIX-SOLDE 5) | ⏳ Implémenté et testé (émulateur compris) — rule `carriedOverAmount` **non déployée**, pas encore testé sur appareil, branche non mergée |
 
 ### Niveau de stabilité
 **Beta avancée / production-candidat** — Stable et sécurisé pour le
@@ -995,6 +1008,9 @@ Blocants restants avant prod réelle :
   et `doc/C-PORTAL-9_SPRINT_REPORT.md`
 
 ### Prochaines étapes suggérées
+0. **F-FIX-SOLDE 5** : déployer la rule, mettre à jour les appareils, tester
+   sur appareil, puis PR (ordre exact au §8.6 de
+   `doc/F-FIX-SOLDE_SPRINT_REPORT.md`).
 1. **C-PORTAL.10 — distinction archives/en cours après un solde de
    compte** : le backfill (C-PORTAL.9) recopie tout sans distinction,
    un client voit dans la même liste ce qu'il a déjà payé et ce qu'il

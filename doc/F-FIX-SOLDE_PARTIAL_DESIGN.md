@@ -1,7 +1,8 @@
 # F-FIX-SOLDE — Conception du solde partiel (étape 4)
 
-> **Conception seule, aucun code écrit.** Décisions validées par William le
-> 2026-11-03 (§10). Étape 5 pas encore lancée.
+> Décisions validées par William le 2026-11-03 (§10). **Implémenté** le 2026-11-03
+> sur `feature/f-fix-solde-partiel` (étapes 5.0 à 5.7), non mergé, rule non
+> déployée : voir le §8 de `doc/F-FIX-SOLDE_SPRINT_REPORT.md`.
 
 ## 1. Le besoin
 
