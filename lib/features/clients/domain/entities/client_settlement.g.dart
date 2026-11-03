@@ -13,6 +13,9 @@ _ClientSettlement _$ClientSettlementFromJson(Map<String, dynamic> json) =>
       date: DateOnly.fromJson(json['date'] as String),
       balanceAtSettlement:
           Money.fromJson((json['balanceAtSettlement'] as num).toInt()),
+      carriedOverAmount: json['carriedOverAmount'] == null
+          ? Money.zero
+          : Money.fromJson((json['carriedOverAmount'] as num).toInt()),
       note: json['note'] as String?,
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
@@ -23,6 +26,7 @@ Map<String, dynamic> _$ClientSettlementToJson(_ClientSettlement instance) =>
       'clientId': instance.clientId,
       'date': instance.date.toJson(),
       'balanceAtSettlement': instance.balanceAtSettlement.toJson(),
+      'carriedOverAmount': instance.carriedOverAmount.toJson(),
       'note': instance.note,
       'createdAt': instance.createdAt.toIso8601String(),
     };

@@ -21,13 +21,18 @@ mixin _$ClientSettlement {
   String get clientId;
 
   /// Date de remise à zéro (format YYYY-MM-DD).
-  /// Seules les entrées strictement postérieures à cette date
-  /// sont comptabilisées dans la balance courante.
+  /// Sert à choisir le dernier solde et à l'affichage, sans effet sur le
+  /// montant : la coupure se fait sur [createdAt].
   DateOnly get date;
 
   /// Montant soldé en centimes au moment de la remise à zéro.
   /// Enregistré à titre d'information / archivage.
   Money get balanceAtSettlement;
+
+  /// Reste reporté sur la période suivante, en centimes : positif, le client
+  /// doit ; négatif, avance du client. Absent ou `null` en base : 0, soit un
+  /// solde à zéro (tous les documents antérieurs au solde partiel).
+  Money get carriedOverAmount;
 
   /// Note libre (ex: "Règlement final chantier Rue de la Loi").
   String? get note;
@@ -57,6 +62,8 @@ mixin _$ClientSettlement {
             (identical(other.date, date) || other.date == date) &&
             (identical(other.balanceAtSettlement, balanceAtSettlement) ||
                 other.balanceAtSettlement == balanceAtSettlement) &&
+            (identical(other.carriedOverAmount, carriedOverAmount) ||
+                other.carriedOverAmount == carriedOverAmount) &&
             (identical(other.note, note) || other.note == note) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
@@ -64,12 +71,12 @@ mixin _$ClientSettlement {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType, id, clientId, date, balanceAtSettlement, note, createdAt);
+  int get hashCode => Object.hash(runtimeType, id, clientId, date,
+      balanceAtSettlement, carriedOverAmount, note, createdAt);
 
   @override
   String toString() {
-    return 'ClientSettlement(id: $id, clientId: $clientId, date: $date, balanceAtSettlement: $balanceAtSettlement, note: $note, createdAt: $createdAt)';
+    return 'ClientSettlement(id: $id, clientId: $clientId, date: $date, balanceAtSettlement: $balanceAtSettlement, carriedOverAmount: $carriedOverAmount, note: $note, createdAt: $createdAt)';
   }
 }
 
@@ -84,6 +91,7 @@ abstract mixin class $ClientSettlementCopyWith<$Res> {
       String clientId,
       DateOnly date,
       Money balanceAtSettlement,
+      Money carriedOverAmount,
       String? note,
       DateTime createdAt});
 }
@@ -105,6 +113,7 @@ class _$ClientSettlementCopyWithImpl<$Res>
     Object? clientId = null,
     Object? date = null,
     Object? balanceAtSettlement = null,
+    Object? carriedOverAmount = null,
     Object? note = freezed,
     Object? createdAt = null,
   }) {
@@ -124,6 +133,10 @@ class _$ClientSettlementCopyWithImpl<$Res>
       balanceAtSettlement: null == balanceAtSettlement
           ? _self.balanceAtSettlement
           : balanceAtSettlement // ignore: cast_nullable_to_non_nullable
+              as Money,
+      carriedOverAmount: null == carriedOverAmount
+          ? _self.carriedOverAmount
+          : carriedOverAmount // ignore: cast_nullable_to_non_nullable
               as Money,
       note: freezed == note
           ? _self.note
@@ -230,16 +243,28 @@ extension ClientSettlementPatterns on ClientSettlement {
 
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
-    TResult Function(String id, String clientId, DateOnly date,
-            Money balanceAtSettlement, String? note, DateTime createdAt)?
+    TResult Function(
+            String id,
+            String clientId,
+            DateOnly date,
+            Money balanceAtSettlement,
+            Money carriedOverAmount,
+            String? note,
+            DateTime createdAt)?
         $default, {
     required TResult orElse(),
   }) {
     final _that = this;
     switch (_that) {
       case _ClientSettlement() when $default != null:
-        return $default(_that.id, _that.clientId, _that.date,
-            _that.balanceAtSettlement, _that.note, _that.createdAt);
+        return $default(
+            _that.id,
+            _that.clientId,
+            _that.date,
+            _that.balanceAtSettlement,
+            _that.carriedOverAmount,
+            _that.note,
+            _that.createdAt);
       case _:
         return orElse();
     }
@@ -260,15 +285,27 @@ extension ClientSettlementPatterns on ClientSettlement {
 
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
-    TResult Function(String id, String clientId, DateOnly date,
-            Money balanceAtSettlement, String? note, DateTime createdAt)
+    TResult Function(
+            String id,
+            String clientId,
+            DateOnly date,
+            Money balanceAtSettlement,
+            Money carriedOverAmount,
+            String? note,
+            DateTime createdAt)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _ClientSettlement():
-        return $default(_that.id, _that.clientId, _that.date,
-            _that.balanceAtSettlement, _that.note, _that.createdAt);
+        return $default(
+            _that.id,
+            _that.clientId,
+            _that.date,
+            _that.balanceAtSettlement,
+            _that.carriedOverAmount,
+            _that.note,
+            _that.createdAt);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -288,15 +325,27 @@ extension ClientSettlementPatterns on ClientSettlement {
 
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
-    TResult? Function(String id, String clientId, DateOnly date,
-            Money balanceAtSettlement, String? note, DateTime createdAt)?
+    TResult? Function(
+            String id,
+            String clientId,
+            DateOnly date,
+            Money balanceAtSettlement,
+            Money carriedOverAmount,
+            String? note,
+            DateTime createdAt)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _ClientSettlement() when $default != null:
-        return $default(_that.id, _that.clientId, _that.date,
-            _that.balanceAtSettlement, _that.note, _that.createdAt);
+        return $default(
+            _that.id,
+            _that.clientId,
+            _that.date,
+            _that.balanceAtSettlement,
+            _that.carriedOverAmount,
+            _that.note,
+            _that.createdAt);
       case _:
         return null;
     }
@@ -311,6 +360,7 @@ class _ClientSettlement implements ClientSettlement {
       required this.clientId,
       required this.date,
       required this.balanceAtSettlement,
+      this.carriedOverAmount = Money.zero,
       this.note,
       required this.createdAt});
   factory _ClientSettlement.fromJson(Map<String, dynamic> json) =>
@@ -325,8 +375,8 @@ class _ClientSettlement implements ClientSettlement {
   final String clientId;
 
   /// Date de remise à zéro (format YYYY-MM-DD).
-  /// Seules les entrées strictement postérieures à cette date
-  /// sont comptabilisées dans la balance courante.
+  /// Sert à choisir le dernier solde et à l'affichage, sans effet sur le
+  /// montant : la coupure se fait sur [createdAt].
   @override
   final DateOnly date;
 
@@ -334,6 +384,13 @@ class _ClientSettlement implements ClientSettlement {
   /// Enregistré à titre d'information / archivage.
   @override
   final Money balanceAtSettlement;
+
+  /// Reste reporté sur la période suivante, en centimes : positif, le client
+  /// doit ; négatif, avance du client. Absent ou `null` en base : 0, soit un
+  /// solde à zéro (tous les documents antérieurs au solde partiel).
+  @override
+  @JsonKey()
+  final Money carriedOverAmount;
 
   /// Note libre (ex: "Règlement final chantier Rue de la Loi").
   @override
@@ -369,6 +426,8 @@ class _ClientSettlement implements ClientSettlement {
             (identical(other.date, date) || other.date == date) &&
             (identical(other.balanceAtSettlement, balanceAtSettlement) ||
                 other.balanceAtSettlement == balanceAtSettlement) &&
+            (identical(other.carriedOverAmount, carriedOverAmount) ||
+                other.carriedOverAmount == carriedOverAmount) &&
             (identical(other.note, note) || other.note == note) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
@@ -376,12 +435,12 @@ class _ClientSettlement implements ClientSettlement {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType, id, clientId, date, balanceAtSettlement, note, createdAt);
+  int get hashCode => Object.hash(runtimeType, id, clientId, date,
+      balanceAtSettlement, carriedOverAmount, note, createdAt);
 
   @override
   String toString() {
-    return 'ClientSettlement(id: $id, clientId: $clientId, date: $date, balanceAtSettlement: $balanceAtSettlement, note: $note, createdAt: $createdAt)';
+    return 'ClientSettlement(id: $id, clientId: $clientId, date: $date, balanceAtSettlement: $balanceAtSettlement, carriedOverAmount: $carriedOverAmount, note: $note, createdAt: $createdAt)';
   }
 }
 
@@ -398,6 +457,7 @@ abstract mixin class _$ClientSettlementCopyWith<$Res>
       String clientId,
       DateOnly date,
       Money balanceAtSettlement,
+      Money carriedOverAmount,
       String? note,
       DateTime createdAt});
 }
@@ -419,6 +479,7 @@ class __$ClientSettlementCopyWithImpl<$Res>
     Object? clientId = null,
     Object? date = null,
     Object? balanceAtSettlement = null,
+    Object? carriedOverAmount = null,
     Object? note = freezed,
     Object? createdAt = null,
   }) {
@@ -438,6 +499,10 @@ class __$ClientSettlementCopyWithImpl<$Res>
       balanceAtSettlement: null == balanceAtSettlement
           ? _self.balanceAtSettlement
           : balanceAtSettlement // ignore: cast_nullable_to_non_nullable
+              as Money,
+      carriedOverAmount: null == carriedOverAmount
+          ? _self.carriedOverAmount
+          : carriedOverAmount // ignore: cast_nullable_to_non_nullable
               as Money,
       note: freezed == note
           ? _self.note

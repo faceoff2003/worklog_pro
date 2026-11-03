@@ -6,9 +6,10 @@ part 'client_settlement.g.dart';
 
 /// Représente une remise à zéro du compte d'un [Client].
 ///
-/// Lorsqu'un solde est enregistré, le calcul de la balance courante
-/// ne tient compte que des données **postérieures** à [date].
-/// Les données antérieures restent archivées et consultables.
+/// Lorsqu'un solde est enregistré, le calcul de la balance courante ne tient
+/// compte que des données saisies après lui (`createdAt` strictement postérieur,
+/// jamais [date]), plus le [carriedOverAmount]. Les données antérieures restent
+/// archivées et consultables.
 @freezed
 abstract class ClientSettlement with _$ClientSettlement {
   const factory ClientSettlement({
@@ -19,13 +20,18 @@ abstract class ClientSettlement with _$ClientSettlement {
     required String clientId,
 
     /// Date de remise à zéro (format YYYY-MM-DD).
-    /// Seules les entrées strictement postérieures à cette date
-    /// sont comptabilisées dans la balance courante.
+    /// Sert à choisir le dernier solde et à l'affichage, sans effet sur le
+    /// montant : la coupure se fait sur [createdAt].
     required DateOnly date,
 
     /// Montant soldé en centimes au moment de la remise à zéro.
     /// Enregistré à titre d'information / archivage.
     required Money balanceAtSettlement,
+
+    /// Reste reporté sur la période suivante, en centimes : positif, le client
+    /// doit ; négatif, avance du client. Absent ou `null` en base : 0, soit un
+    /// solde à zéro (tous les documents antérieurs au solde partiel).
+    @Default(Money.zero) Money carriedOverAmount,
 
     /// Note libre (ex: "Règlement final chantier Rue de la Loi").
     String? note,
