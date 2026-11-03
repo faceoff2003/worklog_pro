@@ -125,7 +125,7 @@ Pas de build pendant les étapes 0 à 4. L'APK de test
 ## 6. Prochaines étapes
 
 1. ~~Lancer le script~~ : fait le 2026-11-03 (§2bis).
-2. Trancher le §10 de la conception.
+2. ~~Trancher le §10 de la conception~~ : fait le 2026-11-03.
 3. Installer Java 21, puis lancer les étapes 5 et suivantes.
 
 ---
