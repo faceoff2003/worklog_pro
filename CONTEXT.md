@@ -18,6 +18,9 @@
 > **Resynchronisé post-F-RELEVE le 2026-11-02** (relevé de compte calculé :
 > §5 règle réelle de coupure, §6 nouvelle page, §9 fix + trois défauts
 > constatés non corrigés, §12 — voir `doc/F-RELEVE_SPRINT_REPORT.md`)
+> **Resynchronisé post-merge PR #7 le 2026-11-03** (F-RELEVE + F-FIX-SOLDE
+> étapes 0-4 mergés dans `main`, tag `v3-f-releve-merge`, testés sur appareil,
+> audit prod des déplacements fait — voir `doc/F-FIX-SOLDE_SPRINT_REPORT.md`)
 > Basé exclusivement sur le code source réel
 
 ---
@@ -619,14 +622,15 @@ Relevé de compte client, calculé et jamais stocké. Détail dans
 ### Résiduelle (connue, non bloquante)
 
 #### Solde client — défauts constatés en F-RELEVE, reproduits à l'identique (2026-11-02)
-Décision de William attendue. Le sprint interdisait tout changement du résultat.
 - ~~**D1 — déplacements hors solde**~~ : **corrigé en F-FIX-SOLDE.2**
-  (2026-11-02, branche non mergée). Le solde et le relevé valent désormais
+  (2026-11-02, mergé PR #7 le 2026-11-03). Audit prod du 2026-11-03 : un seul
+  solde modifié (Solamito, +19,20 €). Le solde et le relevé valent désormais
   `ReportData.theoreticalBalance`. Les soldes passés ne sont pas recalculés. Voir
   `doc/F-FIX-SOLDE_SPRINT_REPORT.md`.
 - **D2 — deux soldes le même jour** : le "dernier" solde est choisi par `date`
   seule, l'égalité dépend de l'ordre des documents Firestore. Le second solde du
-  jour peut être ignoré.
+  jour peut être ignoré. Correction prévue en premier dans F-FIX-SOLDE étape 5
+  (décision du 2026-11-03).
 - **D3 — document de solde illisible** : `watchLastSettlement` renvoie alors
   `null` (compte "jamais soldé", sans erreur), `watchAllSettlements` ignore
   seulement ce document. Le relevé peut alors différer de la carte Compte.
@@ -957,13 +961,13 @@ de `settings.updatedAt`) sont **déployés sur le projet Firebase
 | `firstWhere` protégés | ✅ **Sécurisés** (W-FIX1.2) |
 | Dépendances nettoyées | ✅ **Allégé** (W-FIX1.5) |
 | Tests automatisés | ✅ **500 tests unitaires/widgets** + suite rules (154) + plusieurs `integration_test` sur AVD réel — 0% → couverture ciblée sur six sprints (R-SEC, F-SETTINGS, C-PORTAL, C-PORTAL.8, C-PORTAL.9, F-RELEVE) |
-| Relevé de compte client (F-RELEVE) | ✅ Calculé, jamais stocké — pas encore testé sur appareil réel, branche non mergée |
+| Relevé de compte client (F-RELEVE + F-FIX-SOLDE 0-4) | ✅ Calculé, jamais stocké, déplacements inclus — mergé (PR #7), testé sur appareil le 2026-11-03 |
 | Deep linking / navigation web | ❌ Navigator 1.0 basique |
 | `flutter analyze` | ✅ 0 erreur · 0 warning · **12 info** (dont 11 volontaires) |
 | Rules Firestore M2-M5 + F-SETTINGS.8 + clientPortals (C-PORTAL) | ✅ **Déployées et vérifiées sur appareil** (M1 est un fix de code Dart, pas une rule, déjà inclus dans l'APK release) |
 | Réglages artisan synchronisés cloud (F-SETTINGS) | ✅ `SyncingSettingsRepository`, local-first + réconciliation Firestore |
 | Portail client (C-PORTAL) | ✅ Provisioning, routage de rôle, `ClientHomePage` affiche la vraie liste de prestations (C-PORTAL.8), historique existant repris au provisioning et à la demande (C-PORTAL.9) — dépenses côté client (affichage) toujours une étape à venir |
-| Build APK release | ✅ Réussi (F-RELEVE, 2026-11-02) |
+| Build APK release | ✅ Réussi (`main` après PR #7, 2026-11-03) |
 
 ### Niveau de stabilité
 **Beta avancée / production-candidat** — Stable et sécurisé pour le
@@ -995,7 +999,8 @@ Blocants restants avant prod réelle :
    compte** : le backfill (C-PORTAL.9) recopie tout sans distinction,
    un client voit dans la même liste ce qu'il a déjà payé et ce qu'il
    doit — étape 1 sur `feature/c-portal-10` (`c1c11ef`), à rebaser sur
-   F-RELEVE après merge pour réutiliser `AccountStatementService`.
+   `main` (F-RELEVE mergé). Le service n'est pas réutilisable tel quel côté
+   client (paiements non mirrorés) et CP2 est à corriger dans ce sprint.
 2. **Dépenses côté client** dans `ClientHomePage` — étape séparée.
 3. **Migration `dart:html`** → `package:web` dans `file_saver_web.dart` (voir § Dette — tâche à part, sortie de R-SEC.4).
 4. **Branche debug App Check pour le web** (§9 Dette) — décision de William, hors périmètre C-PORTAL.
