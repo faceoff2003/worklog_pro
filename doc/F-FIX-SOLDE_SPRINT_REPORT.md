@@ -1,17 +1,18 @@
 # Rapport de sprint (partiel) — F-FIX-SOLDE, étapes 0 à 4
 
 > Arrêté le 2026-11-02 à l'étape 4, comme prévu · Branche `feature/f-fix-solde`,
-> créée depuis `feature/f-releve` · Aucun merge, aucune PR, aucun déploiement,
-> aucune rule modifiée, aucune écriture en base, script d'audit non lancé en prod
-> pendant le sprint (lancé ensuite par William, voir le §2bis).
+> créée depuis `feature/f-releve` · Aucun merge, aucun déploiement, aucune rule
+> modifiée, aucune écriture en base · Après le sprint : script d'audit lancé en
+> prod par William et test sur appareil (§2bis), PR #7 vers `main` ouverte le
+> 2026-11-03, non mergée.
 
 ---
 
 ## 1. Résumé en une phrase
 
 Le solde client inclut désormais les déplacements et vaut exactement le « Reste à
-percevoir » du PDF ; le relevé signale les lignes saisies en retard ; le solde
-partiel est conçu et attend ta validation.
+percevoir » du PDF ; le relevé signale les lignes saisies en retard ; solde
+partiel : conception validée le 2026-11-03, implémentation à faire (étape 5).
 
 ---
 
@@ -21,17 +22,15 @@ partiel est conçu et attend ta validation.
 Tag `v2-f-releve` poussé, APK copié dans `backups/worklog_v2-f-releve.apk`.
 
 ### Étape 1 — Audit des déplacements
-`scripts/list-open-travel-entries.mjs`, lecture seule, **à lancer par toi**. Il
+`scripts/list-open-travel-entries.mjs`, lecture seule, lancé par William. Il
 reprend les règles du service : coupure `createdAt` stricte, microsecondes
 conservées. Écart volontaire avec le script modèle : il ne garde que les chemins
 `users/...`, car `workEntries` et `expenses` existent aussi sous `clientPortals/`
 et seraient comptées deux fois.
 
-**Validation partielle** : `--self-check` passe sur la logique de calcul, mais les
-requêtes Firestore n'ont jamais été exécutées, l'émulateur exigeant Java 21 (la
-machine a le JDK 17). Une erreur de lecture est donc possible au premier lancement.
-
-**Lancé en prod par William le 2026-11-03** : voir le §2bis.
+**Pendant le sprint**, seul `--self-check` a été exécuté, sur la logique de calcul :
+l'émulateur exige Java 21 (la machine a le JDK 17). **Lancé en prod par William le
+2026-11-03**, sans erreur de lecture : voir le §2bis.
 
 ### Étape 2 — Déplacements dans le solde
 Vérifié dans le code : `ReportData.theoreticalBalance` = main-d'œuvre + déplacements
@@ -58,7 +57,8 @@ Renseigné si la date de la ligne est antérieure à celle du solde qui la préc
 pour tous les types de ligne et aussi dans les périodes closes. Affichage seul.
 
 ### Étape 4 — Conception du solde partiel
-`doc/F-FIX-SOLDE_PARTIAL_DESIGN.md`. **Aucun code.**
+`doc/F-FIX-SOLDE_PARTIAL_DESIGN.md`. **Aucun code.** Décisions du §10 validées par
+William le 2026-11-03.
 
 ---
 
@@ -88,9 +88,9 @@ Pas de build pendant les étapes 0 à 4. L'APK de test
 
 ## 4. Conséquences du correctif à connaître
 
-1. **Les soldes affichés vont augmenter** pour tout client ayant une prestation
-   ouverte avec déplacement. C'est l'objet du script d'audit. En prod, un seul
-   solde change (Solamito, +19,20 €, voir le §2bis).
+1. **Les soldes affichés augmentent** pour tout client ayant une prestation
+   ouverte avec déplacement. En prod, d'après l'audit, un seul solde change
+   (Solamito, +19,20 €, voir le §2bis).
 2. **Les soldes passés ne sont pas recalculés.** `balanceAtSettlement` reste une
    archive calculée sans déplacement. Dans une période close, le « Solde : X »
    courant inclut désormais les déplacements et peut donc dépasser le « Solde
@@ -106,18 +106,23 @@ Pas de build pendant les étapes 0 à 4. L'APK de test
 **Écarts d'affichage laissés en l'état, hors de l'étape 2 :**
 
 - `WorkEntriesListPage` et `ClientHomePage` (portail) affichent `laborAmountHT` seul :
-  sur une carte de prestation, le montant peut être inférieur au « reste » du badge ;
-- le graphique du CA sur 6 mois (`chart_providers`) ne compte que la main-d'œuvre ;
+  sur une carte de prestation, le montant peut être inférieur au « reste » du badge.
+  Les cartes de `WorkEntriesListPage` sont dans le périmètre de l'étape 5, le portail
+  relève de C-PORTAL.10 ;
+- le graphique du CA sur 6 mois (`chart_providers`) ne compte que la main-d'œuvre.
+  Inclus dans le périmètre de l'étape 5 ;
 - le détail de `ReportsPage` n'a pas de ligne déplacements : ses lignes ne somment
   pas à « Total Production » quand il y en a ;
 - la ligne « Prestations » de `ClientFormPage` inclut désormais les déplacements.
 
 **Autres :**
 
-- D2 et D3 restent ouverts. La conception recommande de corriger D2 avant le report.
+- D2 et D3 restent ouverts. Décidé : D2 est corrigé en premier à l'étape 5.
 - Les paiements ne sont pas mirrorés dans le portail, donc le service n'y est pas
-  réutilisable tel quel. Voir le §6 de la conception.
-- `c1c11ef` ne protège pas le pivot contre une réécriture par le client.
+  réutilisable tel quel. Décision reportée à C-PORTAL.10, avec un penchant pour des
+  résultats calculés (§6 et §10 de la conception).
+- `c1c11ef` ne protège pas le pivot contre une réécriture par le client : finding
+  **CP2** de `SECURITY_AUDIT.md` (Low, ouvert, à corriger en C-PORTAL.10).
 - **Java 21 est requis** pour les tests de rules de l'étape 5.
 
 ---
@@ -138,5 +143,14 @@ fd519ff chore(scripts): add read-only audit of open travel entries per client
 5a22b5c feat(clients): show entry date on statement lines entered late
 ```
 
-(+ 1 commit de clôture avec la conception, ce rapport et la resynchronisation
-de `CONTEXT.md` et du plan F-RELEVE.)
+Clôture et suivi documentaire :
+
+```
+74d8783 docs(f-fix-solde): add partial settlement design and partial sprint report
+7e8bd85 docs(security): add CP2, portal settlement pivot writable by client
+ab38134 docs(f-fix-solde): record validated partial settlement decisions
+6fc97c2 docs(f-fix-solde): record production audit and device test results
+1a66a2f docs(f-fix-solde): mark partial settlement decisions as done in sprint report
+```
+
+(+ le commit qui resynchronise ce rapport.)
