@@ -64,6 +64,10 @@ class StatementLine {
   /// solde qui précède la ligne (saisie en retard).
   final DateOnly? enteredOn;
 
+  /// Report du solde, renseigné uniquement pour un solde retenu dont le
+  /// `carriedOverAmount` n'est pas nul.
+  final Money? carriedOver;
+
   const StatementLine({
     required this.type,
     required this.id,
@@ -74,6 +78,7 @@ class StatementLine {
     this.description,
     this.status,
     this.enteredOn,
+    this.carriedOver,
   });
 }
 
@@ -173,7 +178,9 @@ class AccountStatementService {
       // Un solde saisi après le "dernier" mais daté avant lui n'a aucun effet
       // sur le calcul. Il reste affiché, juste avant le solde retenu.
       if (identical(closing[i], last)) {
-        lines.addAll(others.where((s) => s.createdAt.isAfter(last!.createdAt)).map(_settlementLine));
+        lines.addAll(others
+            .where((s) => s.createdAt.isAfter(last!.createdAt))
+            .map((s) => _settlementLine(s, retained: false)));
       }
       lines.addAll(_epochLines(buckets[i], isArchived: true, previous: i == 0 ? null : closing[i - 1]));
       lines.add(_settlementLine(closing[i]));
@@ -277,7 +284,7 @@ class AccountStatementService {
     return lines;
   }
 
-  StatementLine _settlementLine(ClientSettlement s) => StatementLine(
+  StatementLine _settlementLine(ClientSettlement s, {bool retained = true}) => StatementLine(
         type: StatementLineType.settlement,
         id: s.id,
         date: s.date,
@@ -285,6 +292,7 @@ class AccountStatementService {
         runningBalance: Money.zero,
         isArchived: true,
         description: s.note,
+        carriedOver: retained && s.carriedOverAmount != Money.zero ? s.carriedOverAmount : null,
       );
 
   Money _sum(List<_Draft> drafts, StatementLineType type) => drafts

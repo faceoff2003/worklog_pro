@@ -116,4 +116,39 @@ void main() {
     expect(find.text('Avance du client'), findsOneWidget);
     expect(tester.widget<Text>(find.byKey(const ValueKey('statement_balance'))).data, '-5,00 €');
   });
+
+  testWidgets('report : « Reporté : X € » au séparateur, ligne « Report à nouveau »', (tester) async {
+    await _pump(
+      tester,
+      AsyncValue.data(_statement(
+        [
+          StatementLine(
+            type: StatementLineType.settlement,
+            id: 's1',
+            date: DateOnly.fromString('2026-03-05'),
+            amount: Money.fromCents(1500),
+            runningBalance: Money.zero,
+            isArchived: true,
+            carriedOver: Money.fromCents(1500),
+          ),
+          _line(StatementLineType.carryOver, 's1', '2026-03-05', 1500, 1500),
+          _line(StatementLineType.workEntry, 'w', '2026-03-06', 700, 2200),
+        ],
+        work: 700,
+      )),
+    );
+
+    expect(find.text('Reporté : 15,00 €'), findsOneWidget);
+    expect(find.text('05/03/2026 · Report à nouveau'), findsOneWidget);
+    expect(find.byKey(const ValueKey('statement_carry_s1')), findsOneWidget);
+    expect(find.text('Solde : 22,00 €'), findsOneWidget);
+  });
+
+  testWidgets('sans report : pas de mention « Reporté »', (tester) async {
+    await _pump(
+      tester,
+      AsyncValue.data(_statement([_line(StatementLineType.settlement, 's1', '2026-03-05', 0, 0, archived: true)])),
+    );
+    expect(find.textContaining('Reporté'), findsNothing);
+  });
 }

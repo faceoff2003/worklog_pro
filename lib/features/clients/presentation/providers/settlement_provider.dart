@@ -36,10 +36,12 @@ class SettlementsController extends StateNotifier<AsyncValue<void>> {
   SettlementsController(this._repository) : super(const AsyncData(null));
 
   /// Enregistre un solde pour le client [clientId] avec la balance actuelle [currentBalance].
-  /// À partir de la date d'aujourd'hui, la balance courante redémarrera de zéro.
+  /// La balance courante repart de zéro, ou de [currentBalance] si [carryOver] :
+  /// le report est toujours le solde exact, jamais un autre montant (§10.1).
   Future<void> settle({
     required String clientId,
     required Money currentBalance,
+    bool carryOver = false,
     String? note,
   }) async {
     state = const AsyncLoading();
@@ -49,6 +51,7 @@ class SettlementsController extends StateNotifier<AsyncValue<void>> {
         clientId: clientId,
         date: DateOnly.today(),
         balanceAtSettlement: currentBalance,
+        carriedOverAmount: carryOver ? currentBalance : Money.zero,
         note: note,
         createdAt: DateTime.now(),
       );

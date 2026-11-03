@@ -506,6 +506,10 @@ class _ClientBalanceCard extends ConsumerWidget {
                   ],
                 ),
                 const Divider(height: 24),
+                if (balance.carriedOver != Money.zero) ...[
+                  _buildRow('Report du solde précédent', balance.carriedOver, Colors.black87),
+                  const SizedBox(height: 8),
+                ],
                 _buildRow('Prestations', balance.totalWork, Colors.black87),
                 const SizedBox(height: 8),
                 _buildRow('Dépenses', balance.totalExpenses, Colors.black87),

@@ -416,6 +416,7 @@ void main() {
 
     test('X = 0 : aucune ligne, relevé inchangé', () {
       final s = _build(work: [_work('w', 100, 6)], settlements: [_settlement('s1', 5)]);
+      expect(s.lines.first.carriedOver, isNull);
       expect(types(s), [StatementLineType.settlement, StatementLineType.workEntry]);
       expect(s.carriedOver, Money.zero);
       expect(s.balance.amountCents, 100);
@@ -440,6 +441,7 @@ void main() {
       expect(carry.isArchived, isFalse);
       expect(carry.enteredOn, isNull);
       expect(carry.status, isNull);
+      expect(s.lines.first.carriedOver?.amountCents, 1500, reason: 'mention au séparateur');
       expect(s.lines.map((l) => l.runningBalance.amountCents).skip(2), [1600, 1800]);
     });
 
@@ -526,6 +528,7 @@ void main() {
       );
       expect(s.lastSettlement?.id, 'main');
       expect(carryLine(s).id, 'main');
+      expect(s.lines.firstWhere((l) => l.id == 'backdated').carriedOver, isNull);
       expect(s.carriedOver.amountCents, 500);
       expect(s.balance.amountCents, 600);
     });

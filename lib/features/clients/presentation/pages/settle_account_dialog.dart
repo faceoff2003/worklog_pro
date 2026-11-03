@@ -7,10 +7,11 @@ import 'package:worklog_pro/features/clients/presentation/providers/settlement_p
 /// Dialog de confirmation pour solder le compte d'un client.
 ///
 /// Affiche un résumé de la balance (total dû, total payé, reste)
-/// et permet d'ajouter une note avant de confirmer la remise à zéro.
+/// et permet d'ajouter une note avant de confirmer.
 ///
-/// Après confirmation, la balance courante redémarre de 0€.
-/// L'historique reste archivé et consultable.
+/// Solde non nul : choix obligatoire, sans présélection, entre solder à zéro
+/// et reporter le solde exact sur la période suivante (décisions §10.1-2 de
+/// `doc/F-FIX-SOLDE_PARTIAL_DESIGN.md`). L'historique reste archivé.
 Future<void> showSettleAccountDialog({
   required BuildContext context,
   required WidgetRef ref,
@@ -49,6 +50,12 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
   final _noteController = TextEditingController();
   bool _loading = false;
 
+  /// null tant que rien n'est choisi ; ignoré si le solde est nul.
+  bool? _carryOver;
+
+  bool get _needsChoice => widget.balance.balance != Money.zero;
+  bool get _withCarry => _needsChoice && _carryOver == true;
+
   @override
   void dispose() {
     _noteController.dispose();
@@ -60,6 +67,7 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
     await ref.read(settlementsControllerProvider.notifier).settle(
           clientId: widget.clientId,
           currentBalance: widget.balance.balance,
+          carryOver: _withCarry,
           note: _noteController.text.trim().isEmpty
               ? null
               : _noteController.text.trim(),
@@ -70,7 +78,10 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Compte de ${widget.clientName} soldé. Balance remise à 0€.',
+            _withCarry
+                ? 'Compte de ${widget.clientName} soldé. '
+                    'Report de ${widget.balance.balance.toEurosString()} sur la période suivante.'
+                : 'Compte de ${widget.clientName} soldé. Balance remise à 0€.',
           ),
           backgroundColor: Colors.green.shade700,
           behavior: SnackBarBehavior.floating,
@@ -84,6 +95,12 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
     final balance = widget.balance;
     final isInDebt = balance.balance.amountCents > 0;
     final isOverpaid = balance.isOverpaid;
+    final amount = Money.fromCents(balance.balance.amountCents.abs()).toEurosString();
+    final archiveNote = !_needsChoice || _carryOver == false
+        ? "À partir d'aujourd'hui, la balance repart de 0€."
+        : _carryOver == true
+            ? "À partir d'aujourd'hui, la balance repart de ${balance.balance.toEurosString()}."
+            : 'Choisissez ce que devient le reste.';
 
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -115,6 +132,12 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
             const SizedBox(height: 16),
 
             // Résumé financier
+            if (balance.carriedOver != Money.zero)
+              _SummaryRow(
+                label: 'Report du solde précédent',
+                value: balance.carriedOver,
+                color: Colors.grey.shade700,
+              ),
             _SummaryRow(
               label: 'Total dû (M.O. + déplacements + dépenses)',
               value: balance.totalDue,
@@ -145,16 +168,14 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
                 icon: Icons.info_outline,
                 color: Colors.orange.shade100,
                 borderColor: Colors.orange.shade300,
-                text:
-                    'Le client vous doit encore ${balance.balance.toEurosString()}. '
-                    'Le solde sera enregistré à 0€ quand même.',
+                text: 'Le client vous doit encore $amount.',
               )
             else if (isOverpaid)
               _InfoBanner(
                 icon: Icons.info_outline,
                 color: Colors.blue.shade50,
                 borderColor: Colors.blue.shade200,
-                text: 'Le client a payé en avance. Solde négatif enregistré.',
+                text: 'Le client a payé $amount en avance.',
               )
             else
               _InfoBanner(
@@ -163,6 +184,34 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
                 borderColor: Colors.green.shade200,
                 text: 'Compte à l\'équilibre. Parfait moment pour solder !',
               ),
+
+            if (_needsChoice) ...[
+              const SizedBox(height: 8),
+              RadioGroup<bool>(
+                groupValue: _carryOver,
+                onChanged: (value) => setState(() => _carryOver = value),
+                child: Column(
+                  children: [
+                    RadioListTile<bool>(
+                      key: const ValueKey('settle_choice_zero'),
+                      value: false,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Solder à zéro'),
+                      subtitle: Text(isOverpaid ? "L'avance est abandonnée." : 'Le reste est abandonné.'),
+                    ),
+                    RadioListTile<bool>(
+                      key: const ValueKey('settle_choice_carry'),
+                      value: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(isOverpaid
+                          ? "Solder avec report de l'avance de $amount"
+                          : 'Solder avec report de $amount'),
+                      subtitle: const Text('Repris sur la période suivante.'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 16),
 
@@ -190,7 +239,7 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
             // Note d'archivage
             Text(
               '⚠️ Les données historiques restent archivées et consultables. '
-              'À partir d\'aujourd\'hui, la balance repart de 0€.',
+              '$archiveNote',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey.shade600,
@@ -206,7 +255,8 @@ class _SettleAccountDialogState extends ConsumerState<_SettleAccountDialog> {
           child: const Text('Annuler'),
         ),
         FilledButton.icon(
-          onPressed: _loading ? null : _confirm,
+          key: const ValueKey('settle_confirm'),
+          onPressed: _loading || (_needsChoice && _carryOver == null) ? null : _confirm,
           icon: _loading
               ? const SizedBox(
                   width: 16,

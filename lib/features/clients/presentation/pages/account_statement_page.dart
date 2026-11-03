@@ -91,6 +91,7 @@ class _SettlementSeparator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dayMonth = line.date.formatEuropean().substring(0, 5);
+    final carriedOver = line.carriedOver;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Column(
@@ -104,6 +105,11 @@ class _SettlementSeparator extends StatelessWidget {
             'Solde archivé : ${line.amount.toEurosString()}',
             style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
           ),
+          if (carriedOver != null)
+            Text(
+              'Reporté : ${carriedOver.toEurosString()}',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.indigo.shade700),
+            ),
         ],
       ),
     );

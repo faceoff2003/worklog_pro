@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:worklog_pro/core/value_objects/money.dart';
 import 'package:worklog_pro/core/widgets/delete_confirm_dialog.dart';
 import 'package:worklog_pro/core/widgets/detail_info_row.dart';
 import 'package:worklog_pro/features/client_portal/domain/repositories/client_portal_repository.dart';
@@ -286,6 +287,12 @@ class _AccountSection extends StatelessWidget {
             const SizedBox(height: 12),
 
             // Lignes de balance
+            if (balance.carriedOver != Money.zero)
+              _BalanceRow(
+                label: 'Report du solde précédent',
+                value: balance.carriedOver.toEurosString(),
+                valueColor: Colors.grey.shade700,
+              ),
             _BalanceRow(
               label: 'Total M.O. + déplacements + dépenses',
               value: balance.totalDue.toEurosString(),
