@@ -2,7 +2,8 @@
 
 > Arrêté le 2026-11-02 à l'étape 4, comme prévu · Branche `feature/f-fix-solde`,
 > créée depuis `feature/f-releve` · Aucun merge, aucune PR, aucun déploiement,
-> aucune rule modifiée, aucune écriture en base, script d'audit non lancé en prod.
+> aucune rule modifiée, aucune écriture en base, script d'audit non lancé en prod
+> pendant le sprint (lancé ensuite par William, voir le §2bis).
 
 ---
 
@@ -29,6 +30,8 @@ et seraient comptées deux fois.
 **Validation partielle** : `--self-check` passe sur la logique de calcul, mais les
 requêtes Firestore n'ont jamais été exécutées, l'émulateur exigeant Java 21 (la
 machine a le JDK 17). Une erreur de lecture est donc possible au premier lancement.
+
+**Lancé en prod par William le 2026-11-03** : voir le §2bis.
 
 ### Étape 2 — Déplacements dans le solde
 Vérifié dans le code : `ReportData.theoreticalBalance` = main-d'œuvre + déplacements
@@ -59,6 +62,17 @@ pour tous les types de ligne et aussi dans les périodes closes. Affichage seul.
 
 ---
 
+## 2bis. Résultats après le sprint (2026-11-03)
+
+**Audit en prod**, lancé par William : 3 clients scannés, aucune anomalie. Un seul
+solde change : Solamito, +19,20 €, pour 2 déplacements dont la facturation à part
+est confirmée.
+
+**Test sur appareil** avec l'APK `74d8783` : relevé, séparateur, badges et
+paiement OK, pas de crash.
+
+---
+
 ## 3. Chiffres
 
 | | Avant | Après |
@@ -67,15 +81,16 @@ pour tous les types de ligne et aussi dans les périodes closes. Affichage seul.
 | `flutter analyze` | 12 info | 0 erreur, 0 warning, 12 info |
 | Couverture `account_statement_service` | 86/86 | 87/87 lignes |
 
-Pas de build à cette étape : le seul APK construit est la sauvegarde
-`worklog_v2-f-releve.apk`, **qui ne contient pas ce correctif**.
+Pas de build pendant les étapes 0 à 4. L'APK de test
+`backups/worklog_f-fix-solde-74d8783.apk`, construit ensuite, contient le correctif.
 
 ---
 
 ## 4. Conséquences du correctif à connaître
 
 1. **Les soldes affichés vont augmenter** pour tout client ayant une prestation
-   ouverte avec déplacement. C'est l'objet du script d'audit.
+   ouverte avec déplacement. C'est l'objet du script d'audit. En prod, un seul
+   solde change (Solamito, +19,20 €, voir le §2bis).
 2. **Les soldes passés ne sont pas recalculés.** `balanceAtSettlement` reste une
    archive calculée sans déplacement. Dans une période close, le « Solde : X »
    courant inclut désormais les déplacements et peut donc dépasser le « Solde
@@ -104,14 +119,12 @@ Pas de build à cette étape : le seul APK construit est la sauvegarde
   réutilisable tel quel. Voir le §6 de la conception.
 - `c1c11ef` ne protège pas le pivot contre une réécriture par le client.
 - **Java 21 est requis** pour les tests de rules de l'étape 5.
-- Rien n'a été testé sur appareil.
 
 ---
 
 ## 6. Prochaines étapes
 
-1. Lancer le script : `node scripts/list-open-travel-entries.mjs`, depuis `scripts/`
-   ou avec le bon chemin.
+1. ~~Lancer le script~~ : fait le 2026-11-03 (§2bis).
 2. Trancher le §10 de la conception.
 3. Installer Java 21, puis lancer les étapes 5 et suivantes.
 
