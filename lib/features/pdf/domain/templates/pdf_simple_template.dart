@@ -315,6 +315,8 @@ class PdfSimpleTemplate {
           _summaryRow('Frais internes', report.totalNonBillableExpenses.toEurosString(), darkText),
           pw.SizedBox(height: 4),
           pw.Divider(color: PdfColor.fromHex('#9E9E9E'), thickness: 0.5),
+          if (report.carriedOverAmount.amountCents != 0)
+            _summaryRow('Report à nouveau', report.carriedOverAmount.toEurosString(), darkText),
           _summaryRow('Paiements Reçus', report.totalPayments.toEurosString(), PdfColor.fromHex('#388E3C')),
           pw.Divider(color: PdfColor.fromHex('#9E9E9E'), thickness: 0.5),
           _summaryRow('Reste à Percevoir', report.theoreticalBalance.toEurosString(), balanceColor, bold: true, fontSize: 13),

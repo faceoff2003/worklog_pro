@@ -215,6 +215,41 @@ void main() {
       expect(r.workEntries.map((e) => e.id), ['in']);
     });
 
+    group('report à nouveau', () {
+      final carried = _settlement.copyWith(carriedOverAmount: Money.fromCents(1500));
+
+      test('filtre actif sans chantier : report inclus dans le reste', () async {
+        final c = _container(settlement: () => Stream.value(carried));
+        final n = c.read(reportFilterProvider.notifier);
+        n.updateClient(_c);
+        n.updateSinceLastSettlement(true);
+        final r = (await _report(c)).requireValue;
+        expect(r.carriedOverAmount.amountCents, 1500);
+        expect(r.totalProduction.amountCents, 730, reason: 'production inchangée');
+        expect(r.theoreticalBalance.amountCents, 1500 + 530);
+      });
+
+      test('filtre chantier : pas de report', () async {
+        final c = _container(
+          settlement: () => Stream.value(carried),
+          work: [_work('in', 100, '2026-03-11', _after, projectId: 'p1')],
+        );
+        final n = c.read(reportFilterProvider.notifier);
+        n.updateClient(_c);
+        n.updateProject('p1');
+        n.updateSinceLastSettlement(true);
+        expect((await _report(c)).requireValue.carriedOverAmount, Money.zero);
+      });
+
+      test('période libre : pas de report', () async {
+        final c = _container(settlement: () => Stream.value(carried));
+        final n = c.read(reportFilterProvider.notifier);
+        n.updateClient(_c);
+        n.updateDateRange(DateTimeRange(start: DateTime(2026, 3, 1), end: DateTime(2026, 3, 31)));
+        expect((await _report(c)).requireValue.carriedOverAmount, Money.zero);
+      });
+    });
+
     test('erreur du flux de solde propagée', () async {
       final c = _container(settlement: () => Stream.error(StateError('boom')));
       final n = c.read(reportFilterProvider.notifier);

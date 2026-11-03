@@ -310,6 +310,8 @@ class ReportsPage extends ConsumerWidget {
                     _DetailRow('Total Production', report.totalProduction, isBold: true),
                     const SizedBox(height: 20),
                     _DetailRow('Frais Généraux (Non refacturables)', report.totalNonBillableExpenses),
+                    if (report.carriedOverAmount != Money.zero)
+                      _DetailRow('Report à nouveau', report.carriedOverAmount),
                     
                   ],
                 );

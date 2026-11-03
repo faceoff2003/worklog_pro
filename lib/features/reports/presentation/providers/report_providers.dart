@@ -239,5 +239,7 @@ final reportDataProvider = Provider<AsyncValue<ReportData>>((ref) {
     expenses: expenses.cast(),
     payments: filteredPayments.cast(),
     dateRange: dateRange,
+    carriedOverAmount:
+        since && projectId == null ? lastSettlement?.carriedOverAmount ?? Money.zero : Money.zero,
   ));
 });

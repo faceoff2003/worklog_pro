@@ -110,6 +110,23 @@ void main() {
     await _expectSameEverywhere([settlement], 12345 + 1234 + 6789 + 2525 - 3333);
   });
 
+  ClientSettlement withCarry(int cents) => ClientSettlement(
+        id: 's1',
+        clientId: _c,
+        date: DateOnly.fromString('2026-03-10'),
+        balanceAtSettlement: Money.fromCents(cents),
+        carriedOverAmount: Money.fromCents(cents),
+        createdAt: DateTime(2026, 3, 10, 12),
+      );
+
+  test('report positif : compté une fois, au même centime partout', () async {
+    await _expectSameEverywhere([withCarry(4321)], 4321 + 12345 + 1234 + 6789 + 2525 - 3333);
+  });
+
+  test('report négatif (avance) : déduit au même centime partout', () async {
+    await _expectSameEverywhere([withCarry(-50000)], -50000 + 12345 + 1234 + 6789 + 2525 - 3333);
+  });
+
   test('jamais soldé : mêmes trois chiffres sur tout l\'historique', () async {
     await _expectSameEverywhere(
       const [],

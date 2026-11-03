@@ -41,6 +41,12 @@ mixin _$ReportData {
   /// Période de validité des filtres du rapport.
   DateTimeRange get dateRange;
 
+  /// Report du dernier solde (`ClientSettlement.carriedOverAmount`).
+  /// Renseigné uniquement en mode « Depuis le dernier solde » sans filtre
+  /// chantier : une période libre n'a pas de report défini, et le report
+  /// n'appartient à aucun chantier. Zéro sinon.
+  Money get carriedOverAmount;
+
   /// Create a copy of ReportData
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -69,7 +75,9 @@ mixin _$ReportData {
             const DeepCollectionEquality().equals(other.expenses, expenses) &&
             const DeepCollectionEquality().equals(other.payments, payments) &&
             (identical(other.dateRange, dateRange) ||
-                other.dateRange == dateRange));
+                other.dateRange == dateRange) &&
+            (identical(other.carriedOverAmount, carriedOverAmount) ||
+                other.carriedOverAmount == carriedOverAmount));
   }
 
   @override
@@ -83,11 +91,12 @@ mixin _$ReportData {
       const DeepCollectionEquality().hash(workEntries),
       const DeepCollectionEquality().hash(expenses),
       const DeepCollectionEquality().hash(payments),
-      dateRange);
+      dateRange,
+      carriedOverAmount);
 
   @override
   String toString() {
-    return 'ReportData(totalLaborAmount: $totalLaborAmount, totalTravelAmount: $totalTravelAmount, totalBillableExpenses: $totalBillableExpenses, totalNonBillableExpenses: $totalNonBillableExpenses, totalPayments: $totalPayments, workEntries: $workEntries, expenses: $expenses, payments: $payments, dateRange: $dateRange)';
+    return 'ReportData(totalLaborAmount: $totalLaborAmount, totalTravelAmount: $totalTravelAmount, totalBillableExpenses: $totalBillableExpenses, totalNonBillableExpenses: $totalNonBillableExpenses, totalPayments: $totalPayments, workEntries: $workEntries, expenses: $expenses, payments: $payments, dateRange: $dateRange, carriedOverAmount: $carriedOverAmount)';
   }
 }
 
@@ -106,7 +115,8 @@ abstract mixin class $ReportDataCopyWith<$Res> {
       List<WorkEntry> workEntries,
       List<Expense> expenses,
       List<Payment> payments,
-      DateTimeRange dateRange});
+      DateTimeRange dateRange,
+      Money carriedOverAmount});
 }
 
 /// @nodoc
@@ -130,6 +140,7 @@ class _$ReportDataCopyWithImpl<$Res> implements $ReportDataCopyWith<$Res> {
     Object? expenses = null,
     Object? payments = null,
     Object? dateRange = null,
+    Object? carriedOverAmount = null,
   }) {
     return _then(_self.copyWith(
       totalLaborAmount: null == totalLaborAmount
@@ -168,6 +179,10 @@ class _$ReportDataCopyWithImpl<$Res> implements $ReportDataCopyWith<$Res> {
           ? _self.dateRange
           : dateRange // ignore: cast_nullable_to_non_nullable
               as DateTimeRange,
+      carriedOverAmount: null == carriedOverAmount
+          ? _self.carriedOverAmount
+          : carriedOverAmount // ignore: cast_nullable_to_non_nullable
+              as Money,
     ));
   }
 }
@@ -274,7 +289,8 @@ extension ReportDataPatterns on ReportData {
             List<WorkEntry> workEntries,
             List<Expense> expenses,
             List<Payment> payments,
-            DateTimeRange dateRange)?
+            DateTimeRange dateRange,
+            Money carriedOverAmount)?
         $default, {
     required TResult orElse(),
   }) {
@@ -290,7 +306,8 @@ extension ReportDataPatterns on ReportData {
             _that.workEntries,
             _that.expenses,
             _that.payments,
-            _that.dateRange);
+            _that.dateRange,
+            _that.carriedOverAmount);
       case _:
         return orElse();
     }
@@ -320,7 +337,8 @@ extension ReportDataPatterns on ReportData {
             List<WorkEntry> workEntries,
             List<Expense> expenses,
             List<Payment> payments,
-            DateTimeRange dateRange)
+            DateTimeRange dateRange,
+            Money carriedOverAmount)
         $default,
   ) {
     final _that = this;
@@ -335,7 +353,8 @@ extension ReportDataPatterns on ReportData {
             _that.workEntries,
             _that.expenses,
             _that.payments,
-            _that.dateRange);
+            _that.dateRange,
+            _that.carriedOverAmount);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -364,7 +383,8 @@ extension ReportDataPatterns on ReportData {
             List<WorkEntry> workEntries,
             List<Expense> expenses,
             List<Payment> payments,
-            DateTimeRange dateRange)?
+            DateTimeRange dateRange,
+            Money carriedOverAmount)?
         $default,
   ) {
     final _that = this;
@@ -379,7 +399,8 @@ extension ReportDataPatterns on ReportData {
             _that.workEntries,
             _that.expenses,
             _that.payments,
-            _that.dateRange);
+            _that.dateRange,
+            _that.carriedOverAmount);
       case _:
         return null;
     }
@@ -398,7 +419,8 @@ class _ReportData extends ReportData {
       required final List<WorkEntry> workEntries,
       required final List<Expense> expenses,
       required final List<Payment> payments,
-      required this.dateRange})
+      required this.dateRange,
+      this.carriedOverAmount = Money.zero})
       : _workEntries = workEntries,
         _expenses = expenses,
         _payments = payments,
@@ -461,6 +483,14 @@ class _ReportData extends ReportData {
   @override
   final DateTimeRange dateRange;
 
+  /// Report du dernier solde (`ClientSettlement.carriedOverAmount`).
+  /// Renseigné uniquement en mode « Depuis le dernier solde » sans filtre
+  /// chantier : une période libre n'a pas de report défini, et le report
+  /// n'appartient à aucun chantier. Zéro sinon.
+  @override
+  @JsonKey()
+  final Money carriedOverAmount;
+
   /// Create a copy of ReportData
   /// with the given fields replaced by the non-null parameter values.
   @override
@@ -490,7 +520,9 @@ class _ReportData extends ReportData {
             const DeepCollectionEquality().equals(other._expenses, _expenses) &&
             const DeepCollectionEquality().equals(other._payments, _payments) &&
             (identical(other.dateRange, dateRange) ||
-                other.dateRange == dateRange));
+                other.dateRange == dateRange) &&
+            (identical(other.carriedOverAmount, carriedOverAmount) ||
+                other.carriedOverAmount == carriedOverAmount));
   }
 
   @override
@@ -504,11 +536,12 @@ class _ReportData extends ReportData {
       const DeepCollectionEquality().hash(_workEntries),
       const DeepCollectionEquality().hash(_expenses),
       const DeepCollectionEquality().hash(_payments),
-      dateRange);
+      dateRange,
+      carriedOverAmount);
 
   @override
   String toString() {
-    return 'ReportData(totalLaborAmount: $totalLaborAmount, totalTravelAmount: $totalTravelAmount, totalBillableExpenses: $totalBillableExpenses, totalNonBillableExpenses: $totalNonBillableExpenses, totalPayments: $totalPayments, workEntries: $workEntries, expenses: $expenses, payments: $payments, dateRange: $dateRange)';
+    return 'ReportData(totalLaborAmount: $totalLaborAmount, totalTravelAmount: $totalTravelAmount, totalBillableExpenses: $totalBillableExpenses, totalNonBillableExpenses: $totalNonBillableExpenses, totalPayments: $totalPayments, workEntries: $workEntries, expenses: $expenses, payments: $payments, dateRange: $dateRange, carriedOverAmount: $carriedOverAmount)';
   }
 }
 
@@ -529,7 +562,8 @@ abstract mixin class _$ReportDataCopyWith<$Res>
       List<WorkEntry> workEntries,
       List<Expense> expenses,
       List<Payment> payments,
-      DateTimeRange dateRange});
+      DateTimeRange dateRange,
+      Money carriedOverAmount});
 }
 
 /// @nodoc
@@ -553,6 +587,7 @@ class __$ReportDataCopyWithImpl<$Res> implements _$ReportDataCopyWith<$Res> {
     Object? expenses = null,
     Object? payments = null,
     Object? dateRange = null,
+    Object? carriedOverAmount = null,
   }) {
     return _then(_ReportData(
       totalLaborAmount: null == totalLaborAmount
@@ -591,6 +626,10 @@ class __$ReportDataCopyWithImpl<$Res> implements _$ReportDataCopyWith<$Res> {
           ? _self.dateRange
           : dateRange // ignore: cast_nullable_to_non_nullable
               as DateTimeRange,
+      carriedOverAmount: null == carriedOverAmount
+          ? _self.carriedOverAmount
+          : carriedOverAmount // ignore: cast_nullable_to_non_nullable
+              as Money,
     ));
   }
 }

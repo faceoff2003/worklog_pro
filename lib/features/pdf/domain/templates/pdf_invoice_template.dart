@@ -216,6 +216,8 @@ class PdfInvoiceTemplate {
                     _totalRow('TOTAL HT', report.totalProduction.toEurosString(), accentColor,
                         bold: true, fontSize: 13),
                     pw.SizedBox(height: 8),
+                    if (report.carriedOverAmount.amountCents != 0)
+                      _totalRow('Report à nouveau', report.carriedOverAmount.toEurosString(), darkText),
                     _totalRow('Paiements reçus', '- ${report.totalPayments.toEurosString()}',
                         PdfColor.fromHex('#388E3C')),
                     pw.Divider(color: PdfColor.fromHex('#9E9E9E'), thickness: 0.5),

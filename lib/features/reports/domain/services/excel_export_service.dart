@@ -65,6 +65,9 @@ class ExcelExportService {
     sheet.appendRow([TextCellValue('')]); // Ligne vide
     
     sheet.appendRow([TextCellValue('Dépenses Internes HT'), DoubleCellValue(report.totalNonBillableExpenses.inEuros)]);
+    if (report.carriedOverAmount.amountCents != 0) {
+      sheet.appendRow([TextCellValue('Report à nouveau'), DoubleCellValue(report.carriedOverAmount.inEuros)]);
+    }
     sheet.appendRow([TextCellValue('Total Paiements Reçus'), DoubleCellValue(report.totalPayments.inEuros)]);
     
     sheet.appendRow([TextCellValue('')]); // Ligne vide

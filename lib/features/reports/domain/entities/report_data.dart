@@ -42,6 +42,12 @@ abstract class ReportData with _$ReportData {
     
     /// Période de validité des filtres du rapport.
     required DateTimeRange dateRange,
+
+    /// Report du dernier solde (`ClientSettlement.carriedOverAmount`).
+    /// Renseigné uniquement en mode « Depuis le dernier solde » sans filtre
+    /// chantier : une période libre n'a pas de report défini, et le report
+    /// n'appartient à aucun chantier. Zéro sinon.
+    @Default(Money.zero) Money carriedOverAmount,
   }) = _ReportData;
 
   const ReportData._();
@@ -50,7 +56,7 @@ abstract class ReportData with _$ReportData {
   /// = Main d'œuvre + Déplacements + Dépenses Refacturables.
   Money get totalProduction => totalLaborAmount + totalTravelAmount + totalBillableExpenses;
   
-  /// Balance Théorique pour ce rapport : Combien a été produit vs Combien a été encaissé.
+  /// Balance Théorique pour ce rapport : report + produit − encaissé.
   /// Un nombre positif indique de l'argent dû, un négatif indique un trop-perçu ou acompte.
-  Money get theoreticalBalance => totalProduction - totalPayments;
+  Money get theoreticalBalance => carriedOverAmount + totalProduction - totalPayments;
 }
