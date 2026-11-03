@@ -125,6 +125,8 @@ class _LineTile extends StatelessWidget {
         return 'Paiement';
       case StatementLineType.settlement:
         return 'Solde';
+      case StatementLineType.carryOver:
+        return 'Report à nouveau';
     }
   }
 
@@ -137,7 +139,10 @@ class _LineTile extends StatelessWidget {
     final enteredOn = line.enteredOn;
 
     return Opacity(
-      key: ValueKey('statement_line_${line.id}'),
+      // Un report porte l'id du solde qui l'ouvre : clé distincte.
+      key: ValueKey(line.type == StatementLineType.carryOver
+          ? 'statement_carry_${line.id}'
+          : 'statement_line_${line.id}'),
       opacity: line.isArchived ? 0.6 : 1,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),

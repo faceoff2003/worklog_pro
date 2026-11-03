@@ -52,11 +52,13 @@ Payment _payment(String id, int cents, int day, {DateTime? at, String? note}) =>
       updatedAt: at ?? _at(day),
     );
 
-ClientSettlement _settlement(String id, int day, {DateTime? at, int cents = 0, String? note}) => ClientSettlement(
+ClientSettlement _settlement(String id, int day, {DateTime? at, int cents = 0, int carry = 0, String? note}) =>
+    ClientSettlement(
       id: id,
       clientId: 'c1',
       date: _d(day),
       balanceAtSettlement: Money.fromCents(cents),
+      carriedOverAmount: Money.fromCents(carry),
       note: note,
       createdAt: at ?? _at(day),
     );
@@ -405,6 +407,127 @@ void main() {
         _settlement('a', 3, at: _at(1)),
       ]);
       expect(_ids(s), ['a', 'b', 'z']);
+    });
+  });
+
+  group('report à nouveau (carriedOverAmount)', () {
+    StatementLine carryLine(AccountStatement s) => s.lines.singleWhere((l) => l.type == StatementLineType.carryOver);
+    List<StatementLineType> types(AccountStatement s) => s.lines.map((l) => l.type).toList();
+
+    test('X = 0 : aucune ligne, relevé inchangé', () {
+      final s = _build(work: [_work('w', 100, 6)], settlements: [_settlement('s1', 5)]);
+      expect(types(s), [StatementLineType.settlement, StatementLineType.workEntry]);
+      expect(s.carriedOver, Money.zero);
+      expect(s.balance.amountCents, 100);
+    });
+
+    test("positif : première ligne de l'époque, avant une prestation datée avant le solde", () {
+      final s = _build(
+        work: [_work('late', 100, 2, at: _at(6)), _work('w', 200, 7)],
+        settlements: [_settlement('s1', 5, cents: 1500, carry: 1500)],
+      );
+      expect(_ids(s), ['s1', 's1', 'late', 'w']);
+      expect(types(s), [
+        StatementLineType.settlement,
+        StatementLineType.carryOver,
+        StatementLineType.workEntry,
+        StatementLineType.workEntry,
+      ]);
+      final carry = carryLine(s);
+      expect(carry.amount.amountCents, 1500);
+      expect(carry.runningBalance.amountCents, 1500);
+      expect(carry.date, _d(5));
+      expect(carry.isArchived, isFalse);
+      expect(carry.enteredOn, isNull);
+      expect(carry.status, isNull);
+      expect(s.lines.map((l) => l.runningBalance.amountCents).skip(2), [1600, 1800]);
+    });
+
+    test('total : report + prestations + dépenses − paiements, totaux existants inchangés', () {
+      final s = _build(
+        work: [_work('w', 1000, 6)],
+        expenses: [_expense('e', 300, 6)],
+        payments: [_payment('p', 400, 7)],
+        settlements: [_settlement('s1', 5, carry: 1500)],
+      );
+      expect(s.carriedOver.amountCents, 1500);
+      expect(s.totalWork.amountCents, 1000);
+      expect(s.totalExpenses.amountCents, 300);
+      expect(s.totalPayments.amountCents, 400);
+      expect(s.balance.amountCents, 2400);
+      expect(s.lines.last.runningBalance, s.balance);
+    });
+
+    test('FIFO positif : un paiement inférieur au report ne couvre aucune prestation', () {
+      final s = _build(
+        work: [_work('w', 1000, 6)],
+        payments: [_payment('p', 1200, 7)],
+        settlements: [_settlement('s1', 5, carry: 1500)],
+      );
+      expect(s.workEntryStatuses['w']!.state, WorkEntryPaymentState.unpaid);
+      expect(s.workEntryStatuses['w']!.remaining.amountCents, 1000);
+      expect(s.balance.amountCents, 1300);
+    });
+
+    test("FIFO positif : au-delà du report, le reste couvre les prestations dans l'ordre", () {
+      final s = _build(
+        work: [_work('a', 1000, 6), _work('b', 1000, 8)],
+        payments: [_payment('p', 2000, 9)],
+        settlements: [_settlement('s1', 5, carry: 1500)],
+      );
+      expect(s.workEntryStatuses['a']!.state, WorkEntryPaymentState.partial);
+      expect(s.workEntryStatuses['a']!.remaining.amountCents, 500);
+      expect(s.workEntryStatuses['b']!.state, WorkEntryPaymentState.unpaid);
+      expect(s.balance.amountCents, 1500);
+    });
+
+    test("FIFO négatif (avance) : s'ajoute aux paiements", () {
+      final s = _build(
+        work: [_work('a', 1000, 6), _work('b', 1000, 8)],
+        payments: [_payment('p', 400, 9)],
+        settlements: [_settlement('s1', 5, carry: -1200)],
+      );
+      expect(carryLine(s).runningBalance.amountCents, -1200);
+      expect(s.workEntryStatuses['a']!.state, WorkEntryPaymentState.paid);
+      expect(s.workEntryStatuses['b']!.state, WorkEntryPaymentState.partial);
+      expect(s.workEntryStatuses['b']!.remaining.amountCents, 400);
+      expect(s.balance.amountCents, 400);
+    });
+
+    test('avance seule, sans prestation : solde négatif', () {
+      final s = _build(settlements: [_settlement('s1', 5, carry: -1200)]);
+      expect(s.balance.amountCents, -1200);
+      expect(types(s), [StatementLineType.settlement, StatementLineType.carryOver]);
+    });
+
+    test("époque close : ligne archivée, l'époque repart du report, prestations soldées", () {
+      final s = _build(
+        work: [_work('w', 300, 6), _work('now', 50, 11)],
+        settlements: [_settlement('s1', 5, carry: 1000), _settlement('s2', 10, cents: 1300)],
+      );
+      expect(types(s), [
+        StatementLineType.settlement,
+        StatementLineType.carryOver,
+        StatementLineType.workEntry,
+        StatementLineType.settlement,
+        StatementLineType.workEntry,
+      ]);
+      expect(s.lines[1].isArchived, isTrue);
+      expect(s.lines[2].runningBalance.amountCents, 1300, reason: 'égal au balanceAtSettlement de s2');
+      expect(s.workEntryStatuses['w']!.state, WorkEntryPaymentState.settled);
+      expect(s.carriedOver, Money.zero, reason: 'report de s2, pas de s1');
+      expect(s.balance.amountCents, 50);
+    });
+
+    test('solde non retenu (saisi après, daté avant) : son report est ignoré', () {
+      final s = _build(
+        work: [_work('w', 100, 6, at: _at(6, 15))],
+        settlements: [_settlement('main', 5, carry: 500), _settlement('backdated', 4, at: _at(6), carry: 9999)],
+      );
+      expect(s.lastSettlement?.id, 'main');
+      expect(carryLine(s).id, 'main');
+      expect(s.carriedOver.amountCents, 500);
+      expect(s.balance.amountCents, 600);
     });
   });
 }

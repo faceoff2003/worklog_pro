@@ -56,11 +56,13 @@ Payment _payment(int cents, {String date = '2026-03-10', required DateTime at}) 
       updatedAt: at,
     );
 
-ClientSettlement _settlement({required DateTime at, String date = '2026-03-10', int cents = 0}) => ClientSettlement(
+ClientSettlement _settlement({required DateTime at, String date = '2026-03-10', int cents = 0, int carry = 0}) =>
+    ClientSettlement(
       id: 's1',
       clientId: _client,
       date: DateOnly.fromString(date),
       balanceAtSettlement: Money.fromCents(cents),
+      carriedOverAmount: Money.fromCents(carry),
       createdAt: at,
     );
 
@@ -134,6 +136,30 @@ void main() {
     expect(b.balance.amountCents, -50);
     expect(b.isPaid, isTrue);
     expect(b.isOverpaid, isTrue);
+  });
+
+  group('report à nouveau', () {
+    test('positif : exposé à part et ajouté au solde, totaux inchangés', () async {
+      final b = await _balance(
+        settlement: _settlement(at: _noon, carry: 1500),
+        work: [_work(1000, at: after)],
+        payments: [_payment(400, at: after)],
+      );
+      expect(b.carriedOver.amountCents, 1500);
+      expect(b.totalDue.amountCents, 1000);
+      expect(b.balance.amountCents, 2100);
+      expect(b.isPaid, isFalse);
+    });
+
+    test('négatif (avance) : couvre les prestations suivantes', () async {
+      final b = await _balance(settlement: _settlement(at: _noon, carry: -1500), work: [_work(1000, at: after)]);
+      expect(b.balance.amountCents, -500);
+      expect(b.isOverpaid, isTrue);
+    });
+
+    test('jamais soldé : report nul', () async {
+      expect((await _balance()).carriedOver, Money.zero);
+    });
   });
 
   group('après un solde', () {

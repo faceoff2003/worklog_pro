@@ -10,10 +10,13 @@ import 'package:worklog_pro/features/work_entries/presentation/providers/work_en
 
 /// Balance financière d'un client à l'instant T.
 ///
-/// Si un solde ([ClientSettlement]) existe, seules les entrées
-/// **strictement postérieures** à [settlementDate] sont comptabilisées.
-/// Les données antérieures restent archivées mais n'affectent plus la balance courante.
+/// Si un solde ([ClientSettlement]) existe, seules les entrées saisies après
+/// lui (`createdAt` strictement postérieur) sont comptabilisées, plus son
+/// [carriedOver]. Les données antérieures restent archivées.
 class ClientBalance {
+  /// Report du dernier solde (zéro si aucun). Positif : dû ; négatif : avance.
+  final Money carriedOver;
+
   /// Main d'œuvre et déplacements.
   final Money totalWork;
   final Money totalExpenses;
@@ -26,7 +29,7 @@ class ClientBalance {
   final Money? balanceAtLastSettlement;
 
   Money get totalDue => totalWork + totalExpenses;
-  Money get balance => totalDue - totalPayments;
+  Money get balance => carriedOver + totalDue - totalPayments;
   bool get isPaid => balance.amountCents <= 0;
   bool get isOverpaid => balance.amountCents < 0;
 
@@ -34,6 +37,7 @@ class ClientBalance {
   bool get hasBeenSettled => settlementDate != null;
 
   const ClientBalance({
+    this.carriedOver = Money.zero,
     required this.totalWork,
     required this.totalExpenses,
     required this.totalPayments,
@@ -51,7 +55,7 @@ class ClientBalance {
 /// Provider de la balance d'un client.
 ///
 /// Prend en compte le dernier solde ([lastSettlementProvider]) :
-/// seules les entrées postérieures à la date du solde sont incluses.
+/// seules les entrées saisies après le solde sont incluses, plus son report.
 final clientBalanceProvider =
     Provider.family.autoDispose<AsyncValue<ClientBalance>, String>(
         (ref, clientId) {
@@ -92,6 +96,7 @@ final clientBalanceProvider =
   );
 
   return AsyncValue.data(ClientBalance(
+    carriedOver: statement.carriedOver,
     totalWork: statement.totalWork,
     totalExpenses: statement.totalExpenses,
     totalPayments: statement.totalPayments,

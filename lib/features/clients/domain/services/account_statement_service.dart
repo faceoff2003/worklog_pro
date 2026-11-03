@@ -5,7 +5,10 @@ import 'package:worklog_pro/features/payments/domain/entities/payment.dart';
 import 'package:worklog_pro/features/work_entries/domain/entities/work_entry.dart';
 
 /// Nature d'une ligne de relevé. Calculé, jamais stocké.
-enum StatementLineType { workEntry, expense, payment, settlement }
+///
+/// [carryOver] : « Report à nouveau », le `carriedOverAmount` du solde qui ouvre
+/// l'époque. Son [StatementLine.id] est celui de ce solde.
+enum StatementLineType { workEntry, expense, payment, settlement, carryOver }
 
 /// État de paiement d'une prestation. Calculé, jamais stocké.
 enum WorkEntryPaymentState { settled, paid, partial, unpaid }
@@ -42,11 +45,12 @@ class StatementLine {
   final DateOnly date;
 
   /// Effet sur le solde : positif pour une prestation ou une dépense, négatif
-  /// pour un paiement. Pour un solde : montant archivé `balanceAtSettlement`,
-  /// purement informatif.
+  /// pour un paiement, signé pour un report. Pour un solde : montant archivé
+  /// `balanceAtSettlement`, purement informatif.
   final Money amount;
 
-  /// Solde courant après cette ligne. Repart de zéro après chaque solde.
+  /// Solde courant après cette ligne. Repart du report après chaque solde
+  /// (zéro sans report).
   final Money runningBalance;
 
   /// Vrai si la ligne est antérieure au dernier solde, ou est un solde.
@@ -77,6 +81,9 @@ class StatementLine {
 class AccountStatement {
   final List<StatementLine> lines;
 
+  /// Report du dernier solde (zéro si aucun). Positif : dû ; négatif : avance.
+  final Money carriedOver;
+
   /// Totaux de l'époque courante, c'est-à-dire depuis le dernier solde.
   final Money totalWork;
   final Money totalExpenses;
@@ -85,6 +92,7 @@ class AccountStatement {
 
   const AccountStatement({
     required this.lines,
+    this.carriedOver = Money.zero,
     required this.totalWork,
     required this.totalExpenses,
     required this.totalPayments,
@@ -92,7 +100,7 @@ class AccountStatement {
   });
 
   /// Solde courant. Négatif = avance du client.
-  Money get balance => totalWork + totalExpenses - totalPayments;
+  Money get balance => carriedOver + totalWork + totalExpenses - totalPayments;
 
   /// Statut de chaque prestation, par identifiant.
   Map<String, WorkEntryPaymentStatus> get workEntryStatuses => {
@@ -125,6 +133,12 @@ class AccountStatement {
 /// **Statuts** : les paiements de l'époque courante couvrent ses prestations de
 /// la plus ancienne à la plus récente (FIFO), quelle que soit leur date. Ils ne
 /// sont pas imputés aux dépenses. Toute prestation d'une époque close est soldée.
+///
+/// **Report** (`carriedOverAmount`) : première ligne de l'époque ouverte par le
+/// solde, avant toute prestation quelle que soit sa date ; aucune ligne si zéro.
+/// L'époque démarre à ce montant. Positif, c'est la dette la plus ancienne, les
+/// paiements le couvrent en premier ; négatif (avance), il s'ajoute aux paiements.
+/// Le report d'un solde non retenu (saisi après le dernier, daté avant) est ignoré.
 class AccountStatementService {
   const AccountStatementService();
 
@@ -170,6 +184,7 @@ class AccountStatementService {
 
     return AccountStatement(
       lines: lines,
+      carriedOver: last?.carriedOverAmount ?? Money.zero,
       totalWork: _sum(current, StatementLineType.workEntry),
       totalExpenses: _sum(current, StatementLineType.expense),
       totalPayments: -_sum(current, StatementLineType.payment),
@@ -211,8 +226,24 @@ class AccountStatementService {
 
   List<StatementLine> _epochLines(List<_Draft> drafts, {required bool isArchived, ClientSettlement? previous}) {
     var unallocated = -_sum(drafts, StatementLineType.payment);
-    var running = Money.zero;
+    final carry = previous?.carriedOverAmount ?? Money.zero;
+    var running = carry;
     final lines = <StatementLine>[];
+    if (carry != Money.zero) {
+      if (carry > Money.zero) {
+        unallocated -= unallocated < carry ? unallocated : carry;
+      } else {
+        unallocated -= carry;
+      }
+      lines.add(StatementLine(
+        type: StatementLineType.carryOver,
+        id: previous!.id,
+        date: previous.date,
+        amount: carry,
+        runningBalance: carry,
+        isArchived: isArchived,
+      ));
+    }
     for (final draft in drafts) {
       running += draft.amount;
       WorkEntryPaymentStatus? status;
