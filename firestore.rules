@@ -285,7 +285,13 @@ service cloud.firestore {
         && isValidString(request.resource.data.clientId, 100)
         && isValidString(request.resource.data.date, 10)
         && request.resource.data.balanceAtSettlement is int
-        && ('createdAt' in request.resource.data);
+        && ('createdAt' in request.resource.data)
+        // F-FIX-SOLDE.5.2 : report sur la période suivante, en centimes.
+        // Absent ou null = 0 (anciens documents, ancien APK). Un type faux
+        // rendrait le document illisible côté app (D3) et immuable (M2).
+        && (!('carriedOverAmount' in request.resource.data)
+            || request.resource.data.carriedOverAmount == null
+            || request.resource.data.carriedOverAmount is int);
 
       // Les soldes sont immuables une fois créés : ni update, ni delete.
       // M2 (SECURITY_AUDIT.md) — delete était autorisé au propriétaire,

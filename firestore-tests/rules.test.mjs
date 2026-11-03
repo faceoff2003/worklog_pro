@@ -437,6 +437,59 @@ describe('client_settlements', () => {
   });
 });
 
+// carriedOverAmount (F-FIX-SOLDE.5.2) : un champ mal typé rendrait le document
+// illisible côté app (D3 : "jamais soldé"), sans correction possible (M2).
+describe('client_settlements — carriedOverAmount (F-FIX-SOLDE.5.2)', () => {
+  const base = () => ({
+    clientId: 'client-1',
+    date: '2026-01-01',
+    balanceAtSettlement: 1500,
+    createdAt: new Date(),
+  });
+  const create = (extra) =>
+    docRef(ownerDb(), 'client_settlements', 'doc1').set({ ...base(), ...extra });
+
+  test('create — champ absent → autorisé (documents existants, ancien APK)', async () => {
+    await assertSucceeds(create({}));
+  });
+
+  test('create — null → autorisé', async () => {
+    await assertSucceeds(create({ carriedOverAmount: null }));
+  });
+
+  for (const [label, value] of [['0', 0], ['positif', 1500], ['négatif (avance)', -2500]]) {
+    test(`create — int ${label} → autorisé`, async () => {
+      await assertSucceeds(create({ carriedOverAmount: value }));
+    });
+  }
+
+  for (const [label, value] of [['chaîne', '1500'], ['décimal', 12.5], ['booléen', true]]) {
+    test(`create — ${label} → refusé`, async () => {
+      await assertFails(create({ carriedOverAmount: value }));
+    });
+  }
+
+  test('create — autre utilisateur, int valide → refusé', async () => {
+    await assertFails(
+      docRef(otherDb(), 'client_settlements', 'doc1').set({ ...base(), carriedOverAmount: 1500 }),
+    );
+  });
+
+  test('update — ajout du champ sur un solde existant → refusé (M2)', async () => {
+    await seed('client_settlements', 'doc1', base());
+    await assertFails(
+      docRef(ownerDb(), 'client_settlements', 'doc1').update({ carriedOverAmount: 1500 }),
+    );
+  });
+
+  test('update — modification du champ → refusé (M2)', async () => {
+    await seed('client_settlements', 'doc1', { ...base(), carriedOverAmount: 1500 });
+    await assertFails(
+      docRef(ownerDb(), 'client_settlements', 'doc1').update({ carriedOverAmount: 0 }),
+    );
+  });
+});
+
 // ─────────────────────────────────────────────────────────────
 // settings — zéro validation aujourd'hui (M5)
 // ─────────────────────────────────────────────────────────────
